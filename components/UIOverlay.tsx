@@ -1,13 +1,14 @@
 
 import React from 'react';
-import { GameState, LogMessage, GamePhase, ItemType } from '../types';
-import { MAX_ENERGY, HEAVY_RAIN_THRESHOLD } from '../constants';
-import { Heart, Fish, AlertTriangle, RefreshCw, Play, Pause, LogOut, Home, CloudRain, Sun, Moon, Skull, Thermometer, Briefcase, Flame, Hammer, Archive, X } from 'lucide-react';
+import { GameState, LogMessage, GamePhase, ItemType, NPC, NPCTask } from '../types';
+import { MAX_ENERGY, HEAVY_RAIN_THRESHOLD, NPC_MAX_ENERGY } from '../constants';
+import { Heart, Fish, AlertTriangle, RefreshCw, Play, Pause, LogOut, Home, CloudRain, Sun, Moon, Skull, Thermometer, Briefcase, Flame, Hammer, Archive, X, User, Activity, Utensils } from 'lucide-react';
 
 interface UIOverlayProps {
   gameState: GameState;
   phase: GamePhase;
   logs: LogMessage[];
+  selectedNPC?: NPC | null;
   onStart: () => void;
   onResume: () => void;
   onPause: () => void;
@@ -15,9 +16,16 @@ interface UIOverlayProps {
   onEat: (index: number) => void;
   onWorkbenchAction: (action: 'CRAFT' | 'DEPOSIT' | 'WITHDRAW', itemType?: ItemType, slotIndex?: number) => void;
   onCloseWorkbench: () => void;
+  onNPCCommand: (task: NPCTask) => void;
+  onNPCCollect: () => void;
+  onNPCFeed: () => void;
+  onCloseNPCMenu: () => void;
 }
 
-export const UIOverlay: React.FC<UIOverlayProps> = ({ gameState, phase, logs, onStart, onResume, onPause, onQuit, onEat, onWorkbenchAction, onCloseWorkbench }) => {
+export const UIOverlay: React.FC<UIOverlayProps> = ({ 
+    gameState, phase, logs, selectedNPC, onStart, onResume, onPause, onQuit, onEat, onWorkbenchAction, onCloseWorkbench,
+    onNPCCommand, onNPCCollect, onNPCFeed, onCloseNPCMenu
+}) => {
   const energyPercentage = Math.max(0, (gameState.energy / MAX_ENERGY) * 100);
   
   let energyColor = 'bg-green-500';
@@ -151,6 +159,91 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ gameState, phase, logs, on
             {phase === 'PAUSED' ? <Play className="w-6 h-6" fill="currentColor"/> : <Pause className="w-6 h-6" fill="currentColor"/>}
         </button>
       </div>
+
+      {/* NPC Menu Overlay */}
+      {phase === 'NPC_MENU' && selectedNPC && (
+           <div className="absolute inset-0 flex items-center justify-center bg-black/70 pointer-events-auto backdrop-blur-sm z-50">
+               <div className="bg-slate-800 rounded-xl border-2 border-slate-600 shadow-2xl flex flex-col w-[500px] max-w-full">
+                   <div className="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-900/50 rounded-t-xl">
+                       <div className="flex items-center gap-3">
+                           <User className="w-6 h-6 text-blue-400" />
+                           <h2 className="text-2xl font-bold text-white">{selectedNPC.name}</h2>
+                       </div>
+                       <button onClick={onCloseNPCMenu} className="p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white">
+                           <X className="w-6 h-6" />
+                       </button>
+                   </div>
+                   
+                   <div className="p-6 flex flex-col gap-6">
+                       {/* Stats */}
+                       <div className="flex items-center gap-4">
+                            <div className="flex-1">
+                                <div className="flex justify-between text-xs text-slate-400 mb-1">
+                                    <span>Energy</span>
+                                    <span>{Math.floor(selectedNPC.energy)}/{NPC_MAX_ENERGY}</span>
+                                </div>
+                                <div className="w-full bg-slate-700 rounded-full h-3 overflow-hidden">
+                                    <div className="h-full bg-blue-500" style={{ width: `${(selectedNPC.energy / NPC_MAX_ENERGY) * 100}%` }}></div>
+                                </div>
+                            </div>
+                            <button onClick={onNPCFeed} className="bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded text-sm flex items-center gap-2">
+                                <Utensils className="w-4 h-4" /> Feed
+                            </button>
+                       </div>
+
+                       {/* Inventory */}
+                       <div className="bg-slate-900/50 p-4 rounded-lg">
+                           <div className="flex justify-between items-center mb-2">
+                               <span className="text-sm font-bold text-slate-300">Collected Items</span>
+                               <button onClick={onNPCCollect} className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded">Collect All</button>
+                           </div>
+                           <div className="flex gap-2 flex-wrap h-16 overflow-y-auto">
+                                {selectedNPC.inventory.length === 0 && <span className="text-xs text-slate-500 italic">Empty...</span>}
+                                {selectedNPC.inventory.map((item, i) => (
+                                    <div key={i} className="w-8 h-8 bg-slate-700 rounded flex items-center justify-center border border-slate-600">
+                                        {renderItemIcon(item)}
+                                    </div>
+                                ))}
+                           </div>
+                       </div>
+
+                       {/* Commands */}
+                       <div>
+                           <h3 className="text-sm font-bold text-slate-300 mb-2">Commands</h3>
+                           <div className="grid grid-cols-2 gap-3">
+                               <button 
+                                   onClick={() => onNPCCommand('GATHER_APPLE')} 
+                                   className={`p-3 rounded border flex items-center gap-2 justify-center transition-all ${selectedNPC.currentTask === 'GATHER_APPLE' ? 'bg-blue-600 border-blue-400 text-white' : 'bg-slate-700 border-slate-600 hover:bg-slate-600 text-slate-300'}`}
+                               >
+                                   <div className="w-4 h-4 bg-red-500 rounded-full"></div> Gather Apples
+                               </button>
+                               <button 
+                                   onClick={() => onNPCCommand('GATHER_WOOD')} 
+                                   className={`p-3 rounded border flex items-center gap-2 justify-center transition-all ${selectedNPC.currentTask === 'GATHER_WOOD' ? 'bg-blue-600 border-blue-400 text-white' : 'bg-slate-700 border-slate-600 hover:bg-slate-600 text-slate-300'}`}
+                               >
+                                   <div className="w-2 h-4 bg-amber-700 rotate-12"></div> Gather Wood
+                               </button>
+                               <button 
+                                   onClick={() => onNPCCommand('FISH')} 
+                                   className={`p-3 rounded border flex items-center gap-2 justify-center transition-all ${selectedNPC.currentTask === 'FISH' ? 'bg-blue-600 border-blue-400 text-white' : 'bg-slate-700 border-slate-600 hover:bg-slate-600 text-slate-300'}`}
+                               >
+                                   <Fish className="w-4 h-4" /> Fish
+                               </button>
+                               <button 
+                                   onClick={() => onNPCCommand(null)} 
+                                   className={`p-3 rounded border flex items-center gap-2 justify-center transition-all ${selectedNPC.currentTask === null ? 'bg-blue-600 border-blue-400 text-white' : 'bg-slate-700 border-slate-600 hover:bg-slate-600 text-slate-300'}`}
+                               >
+                                   <Activity className="w-4 h-4" /> Stay Idle
+                               </button>
+                           </div>
+                           <div className="mt-2 text-xs text-slate-500 text-center">
+                               Current Skill Levels: Apple {(selectedNPC.skills.apple * 100).toFixed(0)}% | Wood {(selectedNPC.skills.wood * 100).toFixed(0)}% | Fish {(selectedNPC.skills.fish * 100).toFixed(0)}%
+                           </div>
+                       </div>
+                   </div>
+               </div>
+           </div>
+      )}
 
       {/* Workbench Overlay */}
       {phase === 'WORKBENCH' && (
@@ -317,7 +410,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({ gameState, phase, logs, on
       )}
 
       {/* Bottom Area: Inventory & Logs */}
-      {phase !== 'WORKBENCH' && (
+      {phase !== 'WORKBENCH' && phase !== 'NPC_MENU' && (
         <div className="flex flex-col sm:flex-row items-end justify-between w-full pointer-events-auto gap-4">
             
             {/* Logs */}

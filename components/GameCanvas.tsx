@@ -1,7 +1,7 @@
 
 import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Sky, Stars, Sparkles } from '@react-three/drei';
+import { Sky, Stars, Sparkles, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import { 
     ISLAND_RADIUS, 
@@ -21,7 +21,7 @@ import {
     TORCH_LIGHT_RADIUS,
     TORCH_LIGHT_INTENSITY
 } from '../constants';
-import { Resource, ItemType, GameState, GamePhase, TreeData, Campfire, PlantedSeed } from '../types';
+import { Resource, ItemType, GameState, GamePhase, TreeData, Campfire, PlantedSeed, NPC } from '../types';
 
 // --- Assets & Geometries ---
 
@@ -241,15 +241,16 @@ const HumanoidPlayer: React.FC<HumanoidPlayerProps> = ({ position, isMoving, isS
     }
 
     if (innerGroup.current) {
-        // -Math.PI/2 would be flat face down. We use slightly less to look natural.
-        // -80 degrees is approx -1.4 radians.
-        const targetTilt = isSwimming ? -1.4 : 0;
+        // -Math.PI / 2 is 90 degrees forward.
+        // We use slightly less (-1.4) or exactly -1.57 for flat. 
+        // User requested prone swimming.
+        const targetTilt = isSwimming ? -Math.PI / 2 : 0;
         innerGroup.current.rotation.x = THREE.MathUtils.lerp(innerGroup.current.rotation.x, targetTilt, 0.1);
     }
     
     if (headGroup.current) {
-        // If swimming, tilt head back up so eyes look forward, not at the seabed
-        const targetHeadTilt = isSwimming ? 1.4 : 0;
+        // If swimming, tilt head back up (opposite to body tilt) so eyes look forward
+        const targetHeadTilt = isSwimming ? Math.PI / 2 : 0;
         headGroup.current.rotation.x = THREE.MathUtils.lerp(headGroup.current.rotation.x, targetHeadTilt, 0.1);
     }
 
@@ -259,12 +260,12 @@ const HumanoidPlayer: React.FC<HumanoidPlayerProps> = ({ position, isMoving, isS
     const armAmp = isSwimming ? 0.8 : 0.5;
     
     if (isSwimming) {
-        // Swimming animation (prone)
-        // Arms paddle (Rotate mainly on X, but in a circle motion concept)
-        // In prone position, X rotation moves arms up/down relative to water surface (butterfly/crawl hybrid)
-        // We want a circular motion for paddle.
+        // Prone Swimming Animation
+        // Arms paddle in a circle-ish motion.
         if (leftArm.current) {
+             // Rotate around X for the stroke
              leftArm.current.rotation.x = Math.sin(t) * armAmp - Math.PI; 
+             // Slight Z rotation for spread
              leftArm.current.rotation.z = Math.cos(t) * 0.3;
         }
         if (rightArm.current) {
@@ -272,9 +273,9 @@ const HumanoidPlayer: React.FC<HumanoidPlayerProps> = ({ position, isMoving, isS
              rightArm.current.rotation.z = -Math.cos(t) * 0.3;
         }
         
-        // Legs flutter
-        if (leftLeg.current) leftLeg.current.rotation.x = Math.cos(t * 2) * 0.4;
-        if (rightLeg.current) rightLeg.current.rotation.x = Math.sin(t * 2) * 0.4;
+        // Legs flutter up and down (X axis rotation relative to body)
+        if (leftLeg.current) leftLeg.current.rotation.x = Math.cos(t * 2) * 0.3;
+        if (rightLeg.current) rightLeg.current.rotation.x = Math.sin(t * 2) * 0.3;
     } else {
         // Walking animation
         const legLRot = isMoving ? Math.sin(t) * legAmp : 0;
@@ -363,6 +364,100 @@ const HumanoidPlayer: React.FC<HumanoidPlayerProps> = ({ position, isMoving, isS
     </group>
   );
 };
+
+interface NPCModelProps {
+    npc: NPC;
+    onClick: (npc: NPC) => void;
+    playerPos: THREE.Vector3;
+}
+
+const NPCModel: React.FC<NPCModelProps> = ({ npc, onClick, playerPos }) => {
+    const group = useRef<THREE.Group>(null);
+    const [hovered, setHover] = useState(false);
+    const isUnconscious = npc.state === 'UNCONSCIOUS';
+    const isMoving = npc.state === 'MOVING';
+
+    useEffect(() => {
+        if (hovered) document.body.style.cursor = 'pointer';
+        else document.body.style.cursor = 'auto';
+        return () => { document.body.style.cursor = 'auto'; };
+    }, [hovered]);
+
+    useFrame((state, delta) => {
+        if (!group.current) return;
+        
+        // Position interpolation
+        group.current.position.lerp(new THREE.Vector3(...npc.position), 0.2);
+
+        // Rotation towards target if moving
+        if (npc.targetPos && isMoving) {
+            const direction = new THREE.Vector3(npc.targetPos[0], 0, npc.targetPos[2]).sub(group.current.position);
+            const angle = Math.atan2(direction.x, direction.z);
+            group.current.rotation.y = THREE.MathUtils.lerp(group.current.rotation.y, angle, 0.1);
+        }
+
+        // Animation logic similar to HumanoidPlayer but simplified or reused
+        // Unconscious = lying down
+        if (isUnconscious) {
+            group.current.rotation.x = -Math.PI / 2;
+            group.current.position.y = 0.2;
+        } else {
+             group.current.rotation.x = 0;
+             // Bobbing if working
+             if (npc.state === 'WORKING') {
+                 group.current.position.y = Math.abs(Math.sin(state.clock.elapsedTime * 10)) * 0.1;
+             }
+        }
+    });
+
+    const handleClick = (e: any) => {
+        e.stopPropagation();
+        if (new THREE.Vector3(...npc.position).distanceTo(playerPos) < INTERACTION_DISTANCE * 2) {
+            onClick(npc);
+        }
+    };
+
+    return (
+        <group 
+            ref={group} 
+            onClick={handleClick}
+            onPointerOver={() => setHover(true)}
+            onPointerOut={() => setHover(false)}
+        >
+             {/* Visuals: Different shirt color to distinguish */}
+             <group>
+                <mesh position={[0, 0.75, 0]} castShadow>
+                    <boxGeometry args={[0.35, 0.5, 0.2]} />
+                    <meshStandardMaterial color={isUnconscious ? "#94a3b8" : "#ef4444"} /> 
+                </mesh>
+                <mesh position={[0, 1.15, 0]} castShadow>
+                    <boxGeometry args={[0.25, 0.25, 0.25]} />
+                    <meshStandardMaterial color="#ffdecb" />
+                </mesh>
+                {/* Limbs simplified for NPC */}
+                <mesh position={[-0.23, 0.95, 0]} castShadow>
+                    <boxGeometry args={[0.1, 0.45, 0.1]} />
+                    <meshStandardMaterial color="#ffdecb" />
+                </mesh>
+                <mesh position={[0.23, 0.95, 0]} castShadow>
+                    <boxGeometry args={[0.1, 0.45, 0.1]} />
+                    <meshStandardMaterial color="#ffdecb" />
+                </mesh>
+                <mesh position={[-0.1, 0.5, 0]} castShadow>
+                    <boxGeometry args={[0.14, 0.5, 0.14]} />
+                    <meshStandardMaterial color="#1e293b" />
+                </mesh>
+                <mesh position={[0.1, 0.5, 0]} castShadow>
+                    <boxGeometry args={[0.14, 0.5, 0.14]} />
+                    <meshStandardMaterial color="#1e293b" />
+                </mesh>
+             </group>
+             {isUnconscious && (
+                 <Text position={[0, 1.5, 0]} fontSize={0.3} color="white">SOS</Text>
+             )}
+        </group>
+    );
+}
 
 interface TreeProps {
     position: [number, number, number];
@@ -600,15 +695,17 @@ interface GameSceneProps {
     handleCollect: (resource: Resource) => void;
     handleTreeShake: (pos: [number, number, number]) => void;
     handleInteractWorkbench: () => void;
+    handleInteractNPC: (npc: NPC) => void;
     resources: Resource[];
     trees: TreeData[];
     plantedSeeds: PlantedSeed[];
     campfires: Campfire[];
+    npcs: NPC[];
     playerPosRef: React.MutableRefObject<THREE.Vector3>;
 }
 
 const GameScene: React.FC<GameSceneProps> = ({ 
-    gameState, phase, setMoving, setSwimming, setSheltered, handleCollect, handleTreeShake, handleInteractWorkbench, resources, trees, plantedSeeds, campfires, playerPosRef 
+    gameState, phase, setMoving, setSwimming, setSheltered, handleCollect, handleTreeShake, handleInteractWorkbench, handleInteractNPC, resources, trees, plantedSeeds, campfires, npcs, playerPosRef 
 }) => {
   const { camera } = useThree();
   const playerPos = useRef(new THREE.Vector3(0, 0, 0));
@@ -652,7 +749,7 @@ const GameScene: React.FC<GameSceneProps> = ({
   };
 
   useFrame((state, delta) => {
-    if (phase !== 'PLAYING') {
+    if (phase !== 'PLAYING' && phase !== 'NPC_MENU') {
         setIsMovingLocal(false);
         setMoving(false);
         return;
@@ -676,7 +773,7 @@ const GameScene: React.FC<GameSceneProps> = ({
     }
     setSheltered(sheltered);
 
-    if (isMoving) {
+    if (isMoving && phase === 'PLAYING') {
         const direction = new THREE.Vector3().subVectors(targetPos.current, playerPos.current);
         direction.y = 0;
         const dist = direction.length();
@@ -724,7 +821,7 @@ const GameScene: React.FC<GameSceneProps> = ({
 
       <WorkbenchModel position={[0, 0, 0]} onClick={handleInteractWorkbench} playerPos={playerPos.current} />
 
-      {(phase === 'PLAYING' || phase === 'PAUSED' || phase === 'WORKBENCH') && (
+      {(phase === 'PLAYING' || phase === 'PAUSED' || phase === 'WORKBENCH' || phase === 'NPC_MENU') && (
         <HumanoidPlayer 
             position={playerPos.current} 
             isMoving={isMoving} 
@@ -734,6 +831,10 @@ const GameScene: React.FC<GameSceneProps> = ({
             isHoldingTorch={gameState.isHoldingTorch}
         />
       )}
+
+      {npcs.map(npc => (
+          <NPCModel key={npc.id} npc={npc} onClick={handleInteractNPC} playerPos={playerPos.current} />
+      ))}
 
       {campfires.map(c => (
           <CampfireModel key={c.id} position={c.position} isLarge={c.isLarge} />

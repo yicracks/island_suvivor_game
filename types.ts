@@ -12,7 +12,7 @@ export enum ItemType {
   WOOD_STAND = 'WOOD_STAND'
 }
 
-export type GamePhase = 'MENU' | 'PLAYING' | 'PAUSED' | 'GAMEOVER' | 'WORKBENCH';
+export type GamePhase = 'MENU' | 'PLAYING' | 'PAUSED' | 'GAMEOVER' | 'WORKBENCH' | 'NPC_MENU';
 
 export interface Resource {
   id: string;
@@ -42,6 +42,27 @@ export interface Campfire {
   position: [number, number, number];
   lifeRemaining: number;
   isLarge: boolean;
+}
+
+export type NPCState = 'UNCONSCIOUS' | 'IDLE' | 'MOVING' | 'WORKING';
+export type NPCTask = 'GATHER_WOOD' | 'GATHER_APPLE' | 'FISH' | null;
+
+export interface NPC {
+    id: number;
+    name: string;
+    position: [number, number, number];
+    state: NPCState;
+    targetPos: [number, number, number] | null;
+    energy: number;
+    inventory: ItemType[];
+    currentTask: NPCTask;
+    skills: {
+        wood: number; // 0.0 to 1.0 (added probability)
+        apple: number;
+        fish: number;
+    };
+    actionTimer: number; // ms until next action/move
+    createdAt: number; // For despawning if unconscious
 }
 
 export interface GameState {

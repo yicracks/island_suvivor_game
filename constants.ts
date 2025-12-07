@@ -72,3 +72,13 @@ export const HEAVY_RAIN_THRESHOLD = 0.7;
 // Fish AI
 export const FISH_SPEED_SLOW = 0.8; // Slower for easier catching
 export const FISH_SPEED_FAST = 2.5; // Slower for easier catching
+
+// NPC
+export const NPC_SPAWN_CHANCE = 0.0005; // Per tick (low probability)
+export const NPC_DESPAWN_TIME = 60000; // 60s to rescue
+export const NPC_MAX_ENERGY = 100;
+export const NPC_ENERGY_DECAY = 0.1;
+export const NPC_WORK_DURATION = 3000; // ms per attempt
+export const NPC_BASE_SUCCESS_RATE = 0.3;
+export const NPC_SKILL_GAIN = 0.05;
+export const NPC_MOVEMENT_SPEED = 5;

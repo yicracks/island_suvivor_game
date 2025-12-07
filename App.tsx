@@ -11,7 +11,9 @@ import {
   GamePhase,
   TreeData,
   Campfire,
-  PlantedSeed
+  PlantedSeed,
+  NPC,
+  NPCTask
 } from './types';
 import { 
   MAX_ENERGY, 
@@ -21,6 +23,7 @@ import {
   TOTAL_APPLES, 
   TOTAL_FISH,
   ISLAND_RADIUS,
+  SAND_RADIUS,
   APPLE_HEAL_AMOUNT,
   FISH_HEAL_AMOUNT,
   FISH_COOKED_HEAL_AMOUNT,
@@ -55,7 +58,15 @@ import {
   TREE_RECOVERY_TIME,
   WORKBENCH_SHELTER_RADIUS,
   MAX_TREE_SCALE,
-  TREE_PASSIVE_GROWTH_RATE
+  TREE_PASSIVE_GROWTH_RATE,
+  NPC_SPAWN_CHANCE,
+  NPC_DESPAWN_TIME,
+  NPC_MAX_ENERGY,
+  NPC_ENERGY_DECAY,
+  NPC_WORK_DURATION,
+  NPC_BASE_SUCCESS_RATE,
+  NPC_SKILL_GAIN,
+  NPC_MOVEMENT_SPEED
 } from './constants';
 
 function App() {
@@ -93,6 +104,8 @@ function App() {
   const [trees, setTrees] = useState<TreeData[]>([]);
   const [plantedSeeds, setPlantedSeeds] = useState<PlantedSeed[]>([]);
   const [campfires, setCampfires] = useState<Campfire[]>([]);
+  const [npcs, setNpcs] = useState<NPC[]>([]);
+  const [selectedNPC, setSelectedNPC] = useState<NPC | null>(null);
   
   // Refs
   const lastUpdateRef = useRef(Date.now());
@@ -101,6 +114,7 @@ function App() {
   const campfireIdCounter = useRef(2000);
   const treeIdCounter = useRef(3000);
   const seedIdCounter = useRef(4000);
+  const npcIdCounter = useRef(5000);
 
   // Helper: Add Log
   const addLog = useCallback((text: string, type: LogMessage['type'] = 'info') => {
@@ -154,11 +168,12 @@ function App() {
     }
     setResources(newResources);
     setCampfires([]);
+    setNpcs([]);
   }, []);
 
   // Respawn & Despawn Mechanics
   useEffect(() => {
-    if (phase !== 'PLAYING') return;
+    if (phase !== 'PLAYING' && phase !== 'NPC_MENU') return;
 
     const interval = setInterval(() => {
         const now = Date.now();
@@ -202,7 +217,7 @@ function App() {
   // Main Game Loop
   useEffect(() => {
     const gameLoop = setInterval(() => {
-        if (phase !== 'PLAYING') {
+        if (phase !== 'PLAYING' && phase !== 'NPC_MENU') {
             lastUpdateRef.current = Date.now();
             return;
         }
@@ -230,7 +245,6 @@ function App() {
             
             // Passive Growth
             if (t.scale < MAX_TREE_SCALE) {
-                // Growth rate decreases as tree gets bigger (inversely proportional)
                 const growthFactor = TREE_PASSIVE_GROWTH_RATE * deltaSeconds * (1 / t.scale);
                 updates.scale = Math.min(MAX_TREE_SCALE, t.scale + growthFactor);
             }
@@ -272,6 +286,136 @@ function App() {
 
             return stillGrowing;
         });
+
+        // --- NPC Logic ---
+        
+        // Spawn NPC
+        if (Math.random() < NPC_SPAWN_CHANCE) {
+            const angle = Math.random() * Math.PI * 2;
+            const spawnPos: [number, number, number] = [Math.cos(angle) * SAND_RADIUS, 0.2, Math.sin(angle) * SAND_RADIUS];
+            setNpcs(prev => [
+                ...prev,
+                {
+                    id: npcIdCounter.current++,
+                    name: `Survivor ${prev.length + 1}`,
+                    position: spawnPos,
+                    state: 'UNCONSCIOUS',
+                    targetPos: null,
+                    energy: NPC_MAX_ENERGY / 2, // Spawns weak
+                    inventory: [],
+                    currentTask: null,
+                    skills: { wood: 0, apple: 0, fish: 0 },
+                    actionTimer: 0,
+                    createdAt: now
+                }
+            ]);
+            addLog("Someone washed up on the shore!", "info");
+        }
+
+        setNpcs(prev => {
+            const livingNpcs: NPC[] = [];
+            
+            prev.forEach(npc => {
+                let updated = { ...npc };
+                
+                // Despawn unconscious
+                if (npc.state === 'UNCONSCIOUS') {
+                    if (now - npc.createdAt > NPC_DESPAWN_TIME) {
+                        return; // Remove from list (washed away)
+                    }
+                    livingNpcs.push(updated);
+                    return;
+                }
+
+                // Energy Decay
+                updated.energy -= NPC_ENERGY_DECAY * deltaSeconds;
+                if (updated.state === 'MOVING' || updated.state === 'WORKING') {
+                     updated.energy -= NPC_ENERGY_DECAY * deltaSeconds; // Double decay if active
+                }
+
+                if (updated.energy <= 0) {
+                    addLog(`${updated.name} died of exhaustion.`, "danger");
+                    if (selectedNPC?.id === updated.id) setSelectedNPC(null);
+                    return; // Remove (Death)
+                }
+
+                // AI Behavior
+                if (updated.state === 'IDLE') {
+                    // Do nothing or wander nearby? Just stand for now.
+                    if (updated.currentTask) {
+                        // Choose a target based on task
+                        let target: [number, number, number] | null = null;
+                        const angle = Math.random() * Math.PI * 2;
+                        
+                        if (updated.currentTask === 'FISH') {
+                             const r = ISLAND_RADIUS + 5 + Math.random() * 10;
+                             target = [Math.cos(angle) * r, 0, Math.sin(angle) * r];
+                        } else {
+                             const r = 10 + Math.random() * 20;
+                             target = [Math.cos(angle) * r, 0, Math.sin(angle) * r];
+                        }
+                        updated.targetPos = target;
+                        updated.state = 'MOVING';
+                    }
+                }
+                else if (updated.state === 'MOVING' && updated.targetPos) {
+                    const currentPos = new THREE.Vector3(...updated.position);
+                    const target = new THREE.Vector3(...updated.targetPos);
+                    const dist = currentPos.distanceTo(target);
+
+                    if (dist < 0.5) {
+                        updated.state = 'WORKING';
+                        updated.actionTimer = NPC_WORK_DURATION;
+                    } else {
+                        const dir = new THREE.Vector3().subVectors(target, currentPos).normalize();
+                        const move = dir.multiplyScalar(NPC_MOVEMENT_SPEED * deltaSeconds);
+                        updated.position = [updated.position[0] + move.x, updated.position[1], updated.position[2] + move.z];
+                    }
+                }
+                else if (updated.state === 'WORKING') {
+                    updated.actionTimer -= deltaMs;
+                    if (updated.actionTimer <= 0) {
+                        // Work complete, check success
+                        let successChance = NPC_BASE_SUCCESS_RATE;
+                        if (updated.currentTask === 'FISH') successChance += (updated.skills.fish || 0);
+                        else if (updated.currentTask === 'GATHER_WOOD') successChance += (updated.skills.wood || 0);
+                        else if (updated.currentTask === 'GATHER_APPLE') successChance += (updated.skills.apple || 0);
+
+                        if (Math.random() < successChance) {
+                             // Success
+                             if (updated.currentTask === 'FISH') {
+                                 updated.inventory.push(ItemType.FISH);
+                                 updated.skills.fish = Math.min(1, updated.skills.fish + NPC_SKILL_GAIN);
+                             } else if (updated.currentTask === 'GATHER_WOOD') {
+                                 updated.inventory.push(ItemType.WOOD);
+                                 updated.skills.wood = Math.min(1, updated.skills.wood + NPC_SKILL_GAIN);
+                             } else {
+                                 updated.inventory.push(ItemType.APPLE);
+                                 updated.skills.apple = Math.min(1, updated.skills.apple + NPC_SKILL_GAIN);
+                             }
+                        }
+
+                        // Return to IDLE to pick new spot
+                        updated.state = 'IDLE';
+                        updated.targetPos = null;
+                    }
+                }
+
+                livingNpcs.push(updated);
+            });
+
+            return livingNpcs;
+        });
+
+        // Update selected NPC reference if it changes
+        if (selectedNPC) {
+             setNpcs(current => {
+                 const currentData = current.find(n => n.id === selectedNPC.id);
+                 if (currentData) setSelectedNPC(currentData);
+                 return current;
+             });
+        }
+
 
         setGameState(prev => {
             let updates = { ...prev };
@@ -373,7 +517,7 @@ function App() {
     }, 100);
 
     return () => clearInterval(gameLoop);
-  }, [phase, isMoving, isSwimming, isSheltered, addLog, campfires]);
+  }, [phase, isMoving, isSwimming, isSheltered, addLog, campfires, selectedNPC]);
 
   // --- Handlers ---
 
@@ -401,6 +545,83 @@ function App() {
     setPhase('PLAYING');
     setIsSwimming(false);
     addLog("Welcome survivor. Find Apples and catch fish!", "info");
+  };
+
+  const handleInteractNPC = (npc: NPC) => {
+      if (npc.state === 'UNCONSCIOUS') {
+          // Rescue
+          setNpcs(prev => prev.map(n => n.id === npc.id ? { ...n, state: 'IDLE', energy: 50 } : n));
+          addLog(`${npc.name} woke up! "Thank you! I'll do whatever you say."`, "success");
+      } else {
+          // Open Menu
+          setSelectedNPC(npc);
+          setPhase('NPC_MENU');
+      }
+  };
+
+  const handleNPCCommand = (taskId: NPCTask) => {
+      if (!selectedNPC) return;
+      setNpcs(prev => prev.map(n => n.id === selectedNPC.id ? { ...n, currentTask: taskId, state: 'IDLE', targetPos: null } : n));
+      // Close menu automatically or keep open? Keep open for now.
+  };
+
+  const handleNPCCollect = () => {
+      if (!selectedNPC) return;
+      setGameState(prev => {
+          let newInv = [...prev.inventory];
+          let npcInv = [...selectedNPC.inventory];
+          let collectedCount = 0;
+
+          const emptySlots = newInv.map((val, idx) => val === null ? idx : -1).filter(i => i !== -1);
+          
+          if (emptySlots.length === 0) {
+              addLog("Your inventory is full!", "warning");
+              return prev;
+          }
+
+          // Transfer items
+          while(emptySlots.length > 0 && npcInv.length > 0) {
+              const item = npcInv.shift();
+              const slot = emptySlots.shift();
+              if (item && slot !== undefined) {
+                  newInv[slot] = item;
+                  collectedCount++;
+              }
+          }
+
+          setNpcs(curr => curr.map(n => n.id === selectedNPC.id ? { ...n, inventory: npcInv } : n));
+          if (collectedCount > 0) addLog(`Collected ${collectedCount} items from ${selectedNPC.name}.`, "success");
+          
+          return { ...prev, inventory: newInv };
+      });
+  };
+
+  const handleNPCFeed = () => {
+      if (!selectedNPC) return;
+      
+      setGameState(prev => {
+          // Find food
+          const foodIdx = prev.inventory.findIndex(i => i === ItemType.APPLE || i === ItemType.FISH || i === ItemType.BIG_FISH || i === ItemType.APPLE_JUICE);
+          if (foodIdx === -1) {
+              addLog("No food in your inventory to give!", "warning");
+              return prev;
+          }
+
+          const item = prev.inventory[foodIdx];
+          let heal = 0;
+          if (item === ItemType.APPLE) heal = APPLE_HEAL_AMOUNT;
+          else if (item === ItemType.FISH) heal = FISH_HEAL_AMOUNT;
+          else if (item === ItemType.BIG_FISH) heal = BIG_FISH_HEAL_AMOUNT;
+          else if (item === ItemType.APPLE_JUICE) heal = APPLE_JUICE_HEAL_AMOUNT;
+
+          const newInv = [...prev.inventory];
+          newInv[foodIdx] = null;
+
+          setNpcs(curr => curr.map(n => n.id === selectedNPC.id ? { ...n, energy: Math.min(NPC_MAX_ENERGY, n.energy + heal) } : n));
+          addLog(`Gave ${item} to ${selectedNPC.name}.`, "info");
+          
+          return { ...prev, inventory: newInv };
+      });
   };
 
   const handleCollect = (resource: Resource) => {
@@ -701,9 +922,11 @@ function App() {
         trees={trees}
         plantedSeeds={plantedSeeds}
         campfires={campfires}
+        npcs={npcs}
         handleCollect={handleCollect}
         handleTreeShake={handleTreeShake}
         handleInteractWorkbench={handleInteractWorkbench}
+        handleInteractNPC={handleInteractNPC}
         playerPosRef={playerPosRef}
       />
       <UIOverlay 
@@ -717,6 +940,11 @@ function App() {
         onEat={handleEat}
         onWorkbenchAction={handleWorkbenchAction}
         onCloseWorkbench={() => setPhase('PLAYING')}
+        selectedNPC={selectedNPC}
+        onNPCCommand={handleNPCCommand}
+        onNPCCollect={handleNPCCollect}
+        onNPCFeed={handleNPCFeed}
+        onCloseNPCMenu={() => setPhase('PLAYING')}
       />
     </div>
   );

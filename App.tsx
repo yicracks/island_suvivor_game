@@ -51,7 +51,11 @@ import {
   ITEM_DESPAWN_TIME,
   TREE_GROWTH_TIME_MIN,
   TREE_GROWTH_TIME_MAX,
-  TREE_GROWTH_CHANCE
+  TREE_GROWTH_CHANCE,
+  TREE_RECOVERY_TIME,
+  WORKBENCH_SHELTER_RADIUS,
+  MAX_TREE_SCALE,
+  TREE_PASSIVE_GROWTH_RATE
 } from './constants';
 
 function App() {
@@ -81,7 +85,7 @@ function App() {
   const [isSwimming, setIsSwimming] = useState(false);
   const [isSheltered, setIsSheltered] = useState(false); // Track if under a tree
   
-  // Track player position for campfire building
+  // Track player position for campfire building and shelter check
   const playerPosRef = useRef<THREE.Vector3>(new THREE.Vector3(0,0,0));
   
   const [logs, setLogs] = useState<LogMessage[]>([]);
@@ -116,7 +120,7 @@ function App() {
         // Don't spawn trees too close to center workbench (radius 5)
         if (radius > 8) {
             const scale = 0.8 + Math.random() * 0.7;
-            newTrees.push({ id: treeIdCounter.current++, position: [x, 0, z], scale, shakeCount: 0 });
+            newTrees.push({ id: treeIdCounter.current++, position: [x, 0, z], scale, shakeCount: 0, lastShakeTime: 0 });
         }
     }
     setTrees(newTrees);
@@ -210,7 +214,31 @@ function App() {
 
         setCampfires(prev => prev.map(c => ({...c, lifeRemaining: c.lifeRemaining - deltaMs})).filter(c => c.lifeRemaining > 0));
 
-        // Growth Logic
+        // Check if player is near Workbench (Shelter)
+        const distToWorkbench = playerPosRef.current.distanceTo(new THREE.Vector3(0,0,0));
+        const isNearWorkbench = distToWorkbench < WORKBENCH_SHELTER_RADIUS;
+
+        // Tree Recovery & Passive Growth
+        setTrees(prev => prev.map(t => {
+            let updates = { ...t };
+            
+            // Recovery
+            if (t.shakeCount > 0 && now - t.lastShakeTime > TREE_RECOVERY_TIME) {
+                updates.shakeCount = t.shakeCount - 1;
+                updates.lastShakeTime = now - (TREE_RECOVERY_TIME * 0.5);
+            }
+            
+            // Passive Growth
+            if (t.scale < MAX_TREE_SCALE) {
+                // Growth rate decreases as tree gets bigger (inversely proportional)
+                const growthFactor = TREE_PASSIVE_GROWTH_RATE * deltaSeconds * (1 / t.scale);
+                updates.scale = Math.min(MAX_TREE_SCALE, t.scale + growthFactor);
+            }
+
+            return updates;
+        }));
+
+        // Growth Logic for Planted Seeds
         setPlantedSeeds(prev => {
             const stillGrowing: PlantedSeed[] = [];
             const grown: PlantedSeed[] = [];
@@ -232,7 +260,8 @@ function App() {
                                 id: treeIdCounter.current++,
                                 position: seed.position,
                                 scale: 0.6 + Math.random() * 0.4,
-                                shakeCount: 0
+                                shakeCount: 0,
+                                lastShakeTime: 0
                             });
                         }
                     });
@@ -276,9 +305,11 @@ function App() {
 
             // 3. Wetness Logic
             let wetnessChange = -WETNESS_DRY_RATE;
+            const effectiveShelter = isSheltered || isNearWorkbench;
+
             if (isSwimming) {
                 wetnessChange = WETNESS_GAIN_RATE * 2;
-            } else if (updates.isRaining && !isSheltered) {
+            } else if (updates.isRaining && !effectiveShelter) {
                 wetnessChange = WETNESS_GAIN_RATE * (0.5 + updates.rainIntensity);
             }
             const nearFire = campfires.some(c => {
@@ -615,11 +646,17 @@ function App() {
     if (treeIndex === -1) return;
 
     const tree = trees[treeIndex];
-    const currentChance = TREE_DROP_CHANCE / (1 + tree.shakeCount * TREE_DECAY_FACTOR);
+    // Modified chance logic: Scale + Shake Count
+    const scaleModifier = tree.scale; // Bigger tree = more chance
+    const currentChance = (TREE_DROP_CHANCE * scaleModifier) / (1 + tree.shakeCount * TREE_DECAY_FACTOR);
     
     setTrees(prev => {
         const newTrees = [...prev];
-        newTrees[treeIndex] = { ...tree, shakeCount: tree.shakeCount + 1 };
+        newTrees[treeIndex] = { 
+            ...tree, 
+            shakeCount: tree.shakeCount + 1,
+            lastShakeTime: Date.now()
+        };
         return newTrees;
     });
 
@@ -645,7 +682,7 @@ function App() {
         setResources(prev => [...prev, newResource]);
         addLog(isWood ? "A log fell from the tree." : "An apple fell from the tree.", "info");
     } else {
-        addLog("Nothing fell. (Tree is getting empty)", "info");
+        addLog("Nothing fell.", "info");
     }
   };
 

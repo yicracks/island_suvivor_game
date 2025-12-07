@@ -27,6 +27,7 @@ export interface TreeData {
   position: [number, number, number];
   scale: number;
   shakeCount: number; // For diminishing returns
+  lastShakeTime: number; // For recovery
 }
 
 export interface PlantedSeed {

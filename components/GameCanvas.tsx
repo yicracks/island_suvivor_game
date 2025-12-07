@@ -9,6 +9,7 @@ import {
     SAND_RADIUS, 
     SEA_SIZE, 
     INTERACTION_DISTANCE, 
+    FISH_INTERACTION_DISTANCE,
     SWIM_THRESHOLD, 
     WATER_MOVEMENT_LIMIT,
     FISH_SPEED_SLOW,
@@ -24,7 +25,11 @@ import { Resource, ItemType, GameState, GamePhase, TreeData, Campfire, PlantedSe
 
 // --- Assets & Geometries ---
 
-const Rain = ({ intensity = 0.5 }) => {
+interface RainProps {
+  intensity?: number;
+}
+
+const Rain: React.FC<RainProps> = ({ intensity = 0.5 }) => {
     const count = Math.floor(1000 + intensity * 3000); 
     const points = useRef<THREE.Points>(null);
     const positions = useMemo(() => {
@@ -65,9 +70,14 @@ const Rain = ({ intensity = 0.5 }) => {
     );
 };
 
-const CampfireModel = ({ position, isLarge }: { position: [number, number, number], isLarge: boolean }) => {
+interface CampfireModelProps {
+    position: [number, number, number];
+    isLarge: boolean;
+}
+
+const CampfireModel: React.FC<CampfireModelProps> = ({ position, isLarge }) => {
     const light = useRef<THREE.PointLight>(null);
-    const scale = isLarge ? 2 : 1;
+    const scale = isLarge ? 1.5 : 1;
     const radius = isLarge ? LARGE_CAMPFIRE_LIGHT_RADIUS : CAMPFIRE_LIGHT_RADIUS;
 
     useFrame((state) => {
@@ -78,35 +88,65 @@ const CampfireModel = ({ position, isLarge }: { position: [number, number, numbe
 
     return (
         <group position={position} scale={scale}>
-            <mesh position={[0, 0.1, 0.2]} rotation={[0.2, 0, 0]}>
-                <cylinderGeometry args={[0.08, 0.08, 0.6]} />
-                <meshStandardMaterial color="#3f2e21" />
-            </mesh>
-            <mesh position={[0.2, 0.1, -0.1]} rotation={[0.2, 2, 0]}>
-                <cylinderGeometry args={[0.08, 0.08, 0.6]} />
-                <meshStandardMaterial color="#3f2e21" />
-            </mesh>
-            <mesh position={[-0.2, 0.1, -0.1]} rotation={[0.2, -2, 0]}>
-                <cylinderGeometry args={[0.08, 0.08, 0.6]} />
-                <meshStandardMaterial color="#3f2e21" />
-            </mesh>
-            {isLarge && (
-                <mesh position={[0, 0.2, 0]} rotation={[0, 0, Math.PI/2]}>
-                    <cylinderGeometry args={[0.1, 0.1, 0.7]} />
-                    <meshStandardMaterial color="#3f2e21" />
-                </mesh>
+            {isLarge ? (
+                // Tripod Structure
+                <group position={[0, 0, 0]}>
+                    {/* Leg 1 */}
+                    <mesh position={[0, 0.6, 0.35]} rotation={[0.4, 0, 0]}>
+                         <cylinderGeometry args={[0.06, 0.06, 1.4]} />
+                         <meshStandardMaterial color="#3f2e21" />
+                    </mesh>
+                    {/* Leg 2 */}
+                    <mesh position={[0.3, 0.6, -0.2]} rotation={[0.4, 2.1, 0]}>
+                         <cylinderGeometry args={[0.06, 0.06, 1.4]} />
+                         <meshStandardMaterial color="#3f2e21" />
+                    </mesh>
+                    {/* Leg 3 */}
+                    <mesh position={[-0.3, 0.6, -0.2]} rotation={[0.4, -2.1, 0]}>
+                         <cylinderGeometry args={[0.06, 0.06, 1.4]} />
+                         <meshStandardMaterial color="#3f2e21" />
+                    </mesh>
+                    {/* Fire Base */}
+                    <mesh position={[0, 0.1, 0]}>
+                        <dodecahedronGeometry args={[0.3]} />
+                        <meshBasicMaterial color="#ff4500" transparent opacity={0.8} />
+                    </mesh>
+                </group>
+            ) : (
+                // Standard Campfire
+                <group>
+                    <mesh position={[0, 0.1, 0.2]} rotation={[0.2, 0, 0]}>
+                        <cylinderGeometry args={[0.08, 0.08, 0.6]} />
+                        <meshStandardMaterial color="#3f2e21" />
+                    </mesh>
+                    <mesh position={[0.2, 0.1, -0.1]} rotation={[0.2, 2, 0]}>
+                        <cylinderGeometry args={[0.08, 0.08, 0.6]} />
+                        <meshStandardMaterial color="#3f2e21" />
+                    </mesh>
+                    <mesh position={[-0.2, 0.1, -0.1]} rotation={[0.2, -2, 0]}>
+                        <cylinderGeometry args={[0.08, 0.08, 0.6]} />
+                        <meshStandardMaterial color="#3f2e21" />
+                    </mesh>
+                    <mesh position={[0, 0.3, 0]}>
+                        <dodecahedronGeometry args={[0.25]} />
+                        <meshBasicMaterial color="#ff4500" transparent opacity={0.8} />
+                    </mesh>
+                </group>
             )}
+            
             <pointLight ref={light} color="#ff6600" distance={radius} decay={2} castShadow />
-            <mesh position={[0, 0.3, 0]}>
-                <dodecahedronGeometry args={[0.25 * scale]} />
-                <meshBasicMaterial color="#ff4500" transparent opacity={0.8} />
-            </mesh>
             <Sparkles count={20 * scale} scale={1 * scale} size={2 * scale} speed={0.4} opacity={0.5} color="#ffaa00" position={[0, 0.5, 0]} />
         </group>
     )
 }
 
-const WorkbenchModel = ({ position, onClick, playerPos }: { position: [number, number, number], onClick: () => void, playerPos: THREE.Vector3 }) => {
+interface WorkbenchModelProps {
+    position: [number, number, number];
+    onClick: () => void;
+    playerPos: THREE.Vector3;
+}
+
+const WorkbenchModel: React.FC<WorkbenchModelProps> = ({ position, onClick, playerPos }) => {
     const [hovered, setHover] = useState(false);
     
     useEffect(() => {
@@ -117,7 +157,7 @@ const WorkbenchModel = ({ position, onClick, playerPos }: { position: [number, n
 
     const handleClick = (e: any) => {
         e.stopPropagation();
-        if (new THREE.Vector3(...position).distanceTo(playerPos) < INTERACTION_DISTANCE * 1.5) {
+        if (new THREE.Vector3(...position).distanceTo(playerPos) < INTERACTION_DISTANCE * 2) {
             onClick();
         }
     };
@@ -129,44 +169,62 @@ const WorkbenchModel = ({ position, onClick, playerPos }: { position: [number, n
             onPointerOver={() => setHover(true)}
             onPointerOut={() => setHover(false)}
         >
-            {/* Table Top */}
-            <mesh position={[0, 0.6, 0]} castShadow>
-                <boxGeometry args={[1.5, 0.1, 0.8]} />
-                <meshStandardMaterial color={hovered ? "#a16207" : "#78350f"} />
-            </mesh>
-            {/* Legs */}
-            <mesh position={[-0.6, 0.3, 0.3]} castShadow>
-                <boxGeometry args={[0.1, 0.6, 0.1]} />
+            {/* Shed Posts */}
+            <mesh position={[-1.2, 1, 1.2]} castShadow>
+                <boxGeometry args={[0.15, 2, 0.15]} />
                 <meshStandardMaterial color="#5d4037" />
             </mesh>
-            <mesh position={[0.6, 0.3, 0.3]} castShadow>
-                <boxGeometry args={[0.1, 0.6, 0.1]} />
+            <mesh position={[1.2, 1, 1.2]} castShadow>
+                <boxGeometry args={[0.15, 2, 0.15]} />
                 <meshStandardMaterial color="#5d4037" />
             </mesh>
-            <mesh position={[-0.6, 0.3, -0.3]} castShadow>
-                <boxGeometry args={[0.1, 0.6, 0.1]} />
+            <mesh position={[-1.2, 1, -1.2]} castShadow>
+                <boxGeometry args={[0.15, 2, 0.15]} />
                 <meshStandardMaterial color="#5d4037" />
             </mesh>
-            <mesh position={[0.6, 0.3, -0.3]} castShadow>
-                <boxGeometry args={[0.1, 0.6, 0.1]} />
+            <mesh position={[1.2, 1, -1.2]} castShadow>
+                <boxGeometry args={[0.15, 2, 0.15]} />
                 <meshStandardMaterial color="#5d4037" />
             </mesh>
-            {/* Hammer / Tools */}
-            <mesh position={[0.4, 0.65, 0]} rotation={[0, 0.5, 0]}>
-                <boxGeometry args={[0.1, 0.05, 0.3]} />
-                <meshStandardMaterial color="gray" />
+
+            {/* Roof */}
+            <mesh position={[0, 2.2, 0]} castShadow>
+                <coneGeometry args={[2.5, 1, 4]} />
+                <meshStandardMaterial color="#3f2e21" />
             </mesh>
-            <mesh position={[0.4, 0.65, 0.1]} rotation={[0, 0.5, Math.PI/2]}>
-                 <cylinderGeometry args={[0.02, 0.02, 0.4]} />
-                 <meshStandardMaterial color="#3f2e21" />
-            </mesh>
+
+            {/* Table Inside */}
+            <group position={[0, 0, 0]}>
+                <mesh position={[0, 0.6, 0]} castShadow>
+                    <boxGeometry args={[1.5, 0.1, 0.8]} />
+                    <meshStandardMaterial color={hovered ? "#a16207" : "#78350f"} />
+                </mesh>
+                <mesh position={[0.4, 0.65, 0]} rotation={[0, 0.5, 0]}>
+                    <boxGeometry args={[0.1, 0.05, 0.3]} />
+                    <meshStandardMaterial color="gray" />
+                </mesh>
+                <mesh position={[0.4, 0.65, 0.1]} rotation={[0, 0.5, Math.PI/2]}>
+                     <cylinderGeometry args={[0.02, 0.02, 0.4]} />
+                     <meshStandardMaterial color="#3f2e21" />
+                </mesh>
+            </group>
         </group>
     );
 };
 
-const HumanoidPlayer = ({ position, isMoving, isSwimming, rotation, isSick, isHoldingTorch }: { position: THREE.Vector3, isMoving: boolean, isSwimming: boolean, rotation: number, isSick: boolean, isHoldingTorch: boolean }) => {
+interface HumanoidPlayerProps {
+    position: THREE.Vector3;
+    isMoving: boolean;
+    isSwimming: boolean;
+    rotation: number;
+    isSick: boolean;
+    isHoldingTorch: boolean;
+}
+
+const HumanoidPlayer: React.FC<HumanoidPlayerProps> = ({ position, isMoving, isSwimming, rotation, isSick, isHoldingTorch }) => {
   const group = useRef<THREE.Group>(null);
   const innerGroup = useRef<THREE.Group>(null);
+  const headGroup = useRef<THREE.Group>(null);
   const leftLeg = useRef<THREE.Group>(null);
   const rightLeg = useRef<THREE.Group>(null);
   const leftArm = useRef<THREE.Group>(null);
@@ -174,7 +232,7 @@ const HumanoidPlayer = ({ position, isMoving, isSwimming, rotation, isSick, isHo
 
   useFrame((state) => {
     if (group.current) {
-      group.current.position.lerp(new THREE.Vector3(position.x, isSwimming ? -0.4 : 0, position.z), 0.2);
+      group.current.position.lerp(new THREE.Vector3(position.x, isSwimming ? -0.5 : 0, position.z), 0.2);
       
       const currentRot = group.current.rotation.y;
       const diff = rotation - currentRot;
@@ -183,8 +241,16 @@ const HumanoidPlayer = ({ position, isMoving, isSwimming, rotation, isSick, isHo
     }
 
     if (innerGroup.current) {
-        const targetTilt = isSwimming ? -Math.PI / 3 : 0;
+        // -Math.PI/2 would be flat face down. We use slightly less to look natural.
+        // -80 degrees is approx -1.4 radians.
+        const targetTilt = isSwimming ? -1.4 : 0;
         innerGroup.current.rotation.x = THREE.MathUtils.lerp(innerGroup.current.rotation.x, targetTilt, 0.1);
+    }
+    
+    if (headGroup.current) {
+        // If swimming, tilt head back up so eyes look forward, not at the seabed
+        const targetHeadTilt = isSwimming ? 1.4 : 0;
+        headGroup.current.rotation.x = THREE.MathUtils.lerp(headGroup.current.rotation.x, targetHeadTilt, 0.1);
     }
 
     const speedMult = isSick ? 0.5 : 1;
@@ -193,11 +259,24 @@ const HumanoidPlayer = ({ position, isMoving, isSwimming, rotation, isSick, isHo
     const armAmp = isSwimming ? 0.8 : 0.5;
     
     if (isSwimming) {
-        if (leftArm.current) leftArm.current.rotation.x = Math.sin(t) * armAmp - Math.PI/2;
-        if (rightArm.current) rightArm.current.rotation.x = Math.cos(t) * armAmp - Math.PI/2;
-        if (leftLeg.current) leftLeg.current.rotation.x = Math.cos(t * 2) * 0.3;
-        if (rightLeg.current) rightLeg.current.rotation.x = Math.sin(t * 2) * 0.3;
+        // Swimming animation (prone)
+        // Arms paddle (Rotate mainly on X, but in a circle motion concept)
+        // In prone position, X rotation moves arms up/down relative to water surface (butterfly/crawl hybrid)
+        // We want a circular motion for paddle.
+        if (leftArm.current) {
+             leftArm.current.rotation.x = Math.sin(t) * armAmp - Math.PI; 
+             leftArm.current.rotation.z = Math.cos(t) * 0.3;
+        }
+        if (rightArm.current) {
+             rightArm.current.rotation.x = Math.cos(t) * armAmp - Math.PI;
+             rightArm.current.rotation.z = -Math.cos(t) * 0.3;
+        }
+        
+        // Legs flutter
+        if (leftLeg.current) leftLeg.current.rotation.x = Math.cos(t * 2) * 0.4;
+        if (rightLeg.current) rightLeg.current.rotation.x = Math.sin(t * 2) * 0.4;
     } else {
+        // Walking animation
         const legLRot = isMoving ? Math.sin(t) * legAmp : 0;
         const legRRot = isMoving ? Math.sin(t + Math.PI) * legAmp : 0;
         const armLRot = isMoving ? Math.sin(t + Math.PI) * armAmp : 0;
@@ -224,20 +303,24 @@ const HumanoidPlayer = ({ position, isMoving, isSwimming, rotation, isSick, isHo
                 <boxGeometry args={[0.35, 0.5, 0.2]} />
                 <meshStandardMaterial color={isSick ? "#86efac" : "#3b82f6"} /> 
             </mesh>
-            <mesh position={[0, 1.15, 0]} castShadow>
-                <boxGeometry args={[0.25, 0.25, 0.25]} />
-                <meshStandardMaterial color={isSick ? "#dcfce7" : "#ffdecb"} />
-            </mesh>
-            <group position={[0, 1.15, 0.13]}>
-                <mesh position={[0.06, 0.02, 0]}>
-                    <planeGeometry args={[0.04, 0.04]} />
-                    <meshBasicMaterial color="black" />
+            
+            <group position={[0, 1.15, 0]} ref={headGroup}>
+                <mesh castShadow>
+                    <boxGeometry args={[0.25, 0.25, 0.25]} />
+                    <meshStandardMaterial color={isSick ? "#dcfce7" : "#ffdecb"} />
                 </mesh>
-                <mesh position={[-0.06, 0.02, 0]}>
-                    <planeGeometry args={[0.04, 0.04]} />
-                    <meshBasicMaterial color="black" />
-                </mesh>
+                <group position={[0, 0, 0.13]}>
+                    <mesh position={[0.06, 0.02, 0]}>
+                        <planeGeometry args={[0.04, 0.04]} />
+                        <meshBasicMaterial color="black" />
+                    </mesh>
+                    <mesh position={[-0.06, 0.02, 0]}>
+                        <planeGeometry args={[0.04, 0.04]} />
+                        <meshBasicMaterial color="black" />
+                    </mesh>
+                </group>
             </group>
+
             <group position={[-0.23, 0.95, 0]} ref={leftArm}>
                 <mesh position={[0, -0.2, 0]} castShadow>
                     <boxGeometry args={[0.1, 0.45, 0.1]} />
@@ -281,7 +364,14 @@ const HumanoidPlayer = ({ position, isMoving, isSwimming, rotation, isSick, isHo
   );
 };
 
-const Tree = ({ position, scale = 1, onShake, playerPos }: { position: [number, number, number], scale?: number, onShake: () => void, playerPos: THREE.Vector3 }) => {
+interface TreeProps {
+    position: [number, number, number];
+    scale?: number;
+    onShake: () => void;
+    playerPos: THREE.Vector3;
+}
+
+const Tree: React.FC<TreeProps> = ({ position, scale = 1, onShake, playerPos }) => {
   const group = useRef<THREE.Group>(null);
   const [shaking, setShaking] = useState(false);
   const [hovered, setHover] = useState(false);
@@ -340,7 +430,11 @@ const Tree = ({ position, scale = 1, onShake, playerPos }: { position: [number, 
   );
 };
 
-const PlantedSapling = ({ position }: { position: [number, number, number] }) => {
+interface PlantedSaplingProps {
+    position: [number, number, number];
+}
+
+const PlantedSapling: React.FC<PlantedSaplingProps> = ({ position }) => {
     return (
         <group position={position}>
             <mesh position={[0, 0.2, 0]} castShadow>
@@ -355,7 +449,14 @@ const PlantedSapling = ({ position }: { position: [number, number, number] }) =>
     );
 };
 
-const CollectibleItem = ({ position, active, type, onClick }: { position: [number, number, number], active: boolean, type: ItemType, onClick: () => void }) => {
+interface CollectibleItemProps {
+    position: [number, number, number];
+    active: boolean;
+    type: ItemType;
+    onClick: () => void;
+}
+
+const CollectibleItem: React.FC<CollectibleItemProps> = ({ position, active, type, onClick }) => {
   const [hovered, setHover] = useState(false);
   
   useEffect(() => {
@@ -403,7 +504,14 @@ const CollectibleItem = ({ position, active, type, onClick }: { position: [numbe
   );
 };
 
-const FishSpot = ({ position, active, onClick, playerPos }: { position: [number, number, number], active: boolean, onClick: () => void, playerPos: THREE.Vector3 }) => {
+interface FishSpotProps {
+    position: [number, number, number];
+    active: boolean;
+    onClick: () => void;
+    playerPos: THREE.Vector3;
+}
+
+const FishSpot: React.FC<FishSpotProps> = ({ position, active, onClick, playerPos }) => {
     const ref = useRef<THREE.Group>(null);
     const [hovered, setHover] = useState(false);
     const velocity = useRef(new THREE.Vector3(1, 0, 0));
@@ -452,7 +560,8 @@ const FishSpot = ({ position, active, onClick, playerPos }: { position: [number,
     const handleClick = (e: any) => {
         e.stopPropagation();
         if (!active || !ref.current) return;
-        if (ref.current.position.distanceTo(playerPos) < INTERACTION_DISTANCE) {
+        // Use FISH_INTERACTION_DISTANCE for easier catching
+        if (ref.current.position.distanceTo(playerPos) < FISH_INTERACTION_DISTANCE) {
             onClick();
         }
     };
@@ -557,6 +666,7 @@ const GameScene: React.FC<GameSceneProps> = ({
     }
 
     let sheltered = false;
+    // Check trees
     for(const t of trees) {
         const tPos = new THREE.Vector3(t.position[0], 0, t.position[2]);
         if (playerPos.current.distanceTo(tPos) < SHELTER_DISTANCE) {

@@ -1,8 +1,10 @@
 
+
+
 import React from 'react';
 import { GameState, LogMessage, GamePhase, ItemType, NPC, NPCTask } from '../types';
 import { MAX_ENERGY, HEAVY_RAIN_THRESHOLD, NPC_MAX_ENERGY } from '../constants';
-import { Heart, Fish, AlertTriangle, RefreshCw, Play, Pause, LogOut, Home, CloudRain, Sun, Moon, Skull, Thermometer, Briefcase, Flame, Hammer, Archive, X, User, Activity, Utensils } from 'lucide-react';
+import { Heart, Fish, AlertTriangle, RefreshCw, Play, Pause, LogOut, Home, CloudRain, Sun, Moon, Skull, Thermometer, Briefcase, Flame, Hammer, Archive, X, User, Activity, Utensils, MoveDown } from 'lucide-react';
 
 interface UIOverlayProps {
   gameState: GameState;
@@ -20,11 +22,12 @@ interface UIOverlayProps {
   onNPCCollect: () => void;
   onNPCFeed: () => void;
   onCloseNPCMenu: () => void;
+  onDismount: () => void;
 }
 
 export const UIOverlay: React.FC<UIOverlayProps> = ({ 
     gameState, phase, logs, selectedNPC, onStart, onResume, onPause, onQuit, onEat, onWorkbenchAction, onCloseWorkbench,
-    onNPCCommand, onNPCCollect, onNPCFeed, onCloseNPCMenu
+    onNPCCommand, onNPCCollect, onNPCFeed, onCloseNPCMenu, onDismount
 }) => {
   const energyPercentage = Math.max(0, (gameState.energy / MAX_ENERGY) * 100);
   
@@ -151,13 +154,25 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
             </div>
         </div>
 
-        {/* Pause Button */}
-        <button 
-            onClick={onPause}
-            className="bg-slate-900/80 hover:bg-slate-800 backdrop-blur-sm p-3 rounded-full border border-slate-700 text-white shadow-xl transition-all"
-        >
-            {phase === 'PAUSED' ? <Play className="w-6 h-6" fill="currentColor"/> : <Pause className="w-6 h-6" fill="currentColor"/>}
-        </button>
+        {/* Action Buttons: Pause & Dismount */}
+        <div className="flex flex-col gap-3">
+            <button 
+                onClick={onPause}
+                className="bg-slate-900/80 hover:bg-slate-800 backdrop-blur-sm p-3 rounded-full border border-slate-700 text-white shadow-xl transition-all self-end"
+            >
+                {phase === 'PAUSED' ? <Play className="w-6 h-6" fill="currentColor"/> : <Pause className="w-6 h-6" fill="currentColor"/>}
+            </button>
+
+            {gameState.isRiding && (
+                <button 
+                    onClick={onDismount}
+                    className="bg-amber-600 hover:bg-amber-500 text-white font-bold p-3 rounded-full shadow-lg flex items-center justify-center animate-bounce self-end"
+                    title="Dismount Horse"
+                >
+                    <MoveDown className="w-6 h-6" />
+                </button>
+            )}
+        </div>
       </div>
 
       {/* NPC Menu Overlay */}
@@ -485,6 +500,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
             <p>Plant Seed -> Grows Tree</p>
             <p>Click Wood -> Make Torch</p>
             <p className="mt-2 text-yellow-500/60">Tip: Cook fish at fire!</p>
+            {gameState.isRiding && <p className="mt-2 text-amber-500/80 font-bold">Riding Horse (3x Speed)</p>}
         </div>
       )}
     </div>

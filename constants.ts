@@ -8,6 +8,8 @@
 
 
 
+
+
 // Map Settings
 export const ISLAND_RADIUS = 50;
 export const SAND_RADIUS = 55;
@@ -21,6 +23,7 @@ export const HEALTH_DECAY_IDLE = 0.15;
 export const HEALTH_DECAY_MOVING = 0.6;
 export const HEALTH_DECAY_SWIMMING = 1.5;
 export const MOVEMENT_SPEED = 7;
+export const HORSE_SPEED_MULTIPLIER = 3.0;
 export const INTERACTION_DISTANCE = 4.0;
 export const FISH_INTERACTION_DISTANCE = 8.0; 
 export const MOVEMENT_SPEED_SICK_MULTIPLIER = 0.5;
@@ -34,6 +37,7 @@ export const BIG_FISH_HEAL_AMOUNT = 80;
 
 export const TOTAL_APPLES = 8;
 export const TOTAL_FISH = 15;
+export const TOTAL_HORSES = 3;
 export const RESPAWN_RATE = 20000; 
 export const TREE_DROP_CHANCE = 0.5; 
 export const TREE_DECAY_FACTOR = 0.8; 

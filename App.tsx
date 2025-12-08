@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GameCanvas } from './components/GameCanvas';
 import { UIOverlay } from './components/UIOverlay';
@@ -13,7 +14,8 @@ import {
   Campfire,
   PlantedSeed,
   NPC,
-  NPCTask
+  NPCTask,
+  Horse
 } from './types';
 import { 
   MAX_ENERGY, 
@@ -76,7 +78,8 @@ import {
   WATER_MOVEMENT_LIMIT,
   TREE_AUTO_DROP_INTERVAL_MIN,
   TREE_AUTO_DROP_INTERVAL_MAX,
-  SEA_SIZE
+  SEA_SIZE,
+  TOTAL_HORSES
 } from './constants';
 
 function App() {
@@ -98,6 +101,7 @@ function App() {
     wetness: 0,
     isHoldingTorch: false,
     torchLifeRemaining: 0,
+    isRiding: false,
     lastFoodType: null,
     consecutiveFoodCount: 0
   });
@@ -114,6 +118,7 @@ function App() {
   const [plantedSeeds, setPlantedSeeds] = useState<PlantedSeed[]>([]);
   const [campfires, setCampfires] = useState<Campfire[]>([]);
   const [npcs, setNpcs] = useState<NPC[]>([]);
+  const [horses, setHorses] = useState<Horse[]>([]);
   const [selectedNPC, setSelectedNPC] = useState<NPC | null>(null);
   const npcCountRef = useRef(0);
 
@@ -128,6 +133,7 @@ function App() {
       isSheltered,
       campfires,
       npcs,
+      horses,
       selectedNPC,
       resources,
       playerPos: playerPosRef.current
@@ -140,11 +146,12 @@ function App() {
           isSheltered,
           campfires,
           npcs,
+          horses,
           selectedNPC,
           resources,
           playerPos: playerPosRef.current
       };
-  }, [isMoving, isSwimming, isSheltered, campfires, npcs, selectedNPC, resources]);
+  }, [isMoving, isSwimming, isSheltered, campfires, npcs, horses, selectedNPC, resources]);
 
   // IDs
   const lastUpdateRef = useRef(Date.now());
@@ -155,6 +162,7 @@ function App() {
   const treeIdCounter = useRef(3000);
   const seedIdCounter = useRef(4000);
   const npcIdCounter = useRef(5000);
+  const horseIdCounter = useRef(6000);
 
   // Helper: Add Log
   const addLog = useCallback((text: string, type: LogMessage['type'] = 'info') => {
@@ -178,6 +186,7 @@ function App() {
   const generateWorld = useCallback(() => {
     const newTrees: TreeData[] = [];
     const newResources: Resource[] = [];
+    const newHorses: Horse[] = [];
     const now = Date.now();
 
     for (let i = 0; i < INITIAL_TREE_COUNT; i++) {
@@ -227,6 +236,19 @@ function App() {
         });
     }
     setResources(newResources);
+    
+    // Generate Horses
+    for (let i = 0; i < TOTAL_HORSES; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const r = 5 + Math.random() * (ISLAND_RADIUS - 10);
+        newHorses.push({
+            id: horseIdCounter.current++,
+            position: [Math.cos(angle) * r, 0, Math.sin(angle) * r],
+            rotation: Math.random() * Math.PI * 2
+        });
+    }
+    setHorses(newHorses);
+
     setCampfires([]);
     setNpcs([]);
     npcCountRef.current = 0;
@@ -292,7 +314,7 @@ function App() {
             }));
         }
 
-        // Tree Recovery & Passive Growth & Automatic Apple Drop
+        // Tree Recovery & Passive Growth & Automatic Apple/Wood Drop
         const newResourcesToAdd: Resource[] = [];
         const shouldGrowTrees = now - lastTreeGrowthRef.current > TREE_GROWTH_INTERVAL;
         if (shouldGrowTrees) {
@@ -311,14 +333,18 @@ function App() {
                 updates.scale = Math.min(MAX_TREE_SCALE, t.scale + growthFactor);
             }
             
-            // Auto Drop Apple
+            // Auto Drop Items
             if (now > t.nextDropTime) {
                 const angle = Math.random() * Math.PI * 2;
                 const dist = 1.0 + Math.random() * 1.5;
                 const dropPos: [number, number, number] = [t.position[0] + Math.cos(angle) * dist, 0, t.position[2] + Math.sin(angle) * dist];
+                
+                // 50% Chance Wood, 50% Chance Apple
+                const dropType = Math.random() > 0.5 ? ItemType.WOOD : ItemType.APPLE;
+
                 newResourcesToAdd.push({
                     id: `drop-${resourceIdCounter.current++}`,
-                    type: ItemType.APPLE,
+                    type: dropType,
                     position: dropPos,
                     eaten: false,
                     createdAt: now
@@ -366,9 +392,9 @@ function App() {
         // --- NPC Logic ---
         if (npcCountRef.current === 0 && Math.random() < NPC_SPAWN_CHANCE * (GAME_LOOP_INTERVAL/100)) { 
             const angle = Math.random() * Math.PI * 2;
-            // Spawn on land, near water (Radius 45)
-            const spawnX = Math.cos(angle) * (ISLAND_RADIUS * 0.9);
-            const spawnZ = Math.sin(angle) * (ISLAND_RADIUS * 0.9);
+            // Spawn strictly on shore (ISLAND_RADIUS)
+            const spawnX = Math.cos(angle) * ISLAND_RADIUS;
+            const spawnZ = Math.sin(angle) * ISLAND_RADIUS;
             const spawnPos: [number, number, number] = [spawnX, 0.2, spawnZ];
             
             // Initial heading towards center
@@ -396,7 +422,7 @@ function App() {
                     ignorePlayerUntil: 0
                 }
             ]);
-            addLog(`A survivor washed up on the ${directionLabel} side!`, "info");
+            addLog(`A survivor washed up on the ${directionLabel} shore!`, "info");
         }
 
         let eatenResourceIds: string[] = [];
@@ -601,9 +627,10 @@ function App() {
                         const noise = (Math.random() - 0.5) * Math.PI; // +/- 90deg
                         headingVector.applyAxisAngle(new THREE.Vector3(0, 1, 0), noise);
                     } else {
-                        // Occasional wobble (10% chance per tick) to look natural
-                        if (Math.random() < 0.1) {
-                             const wobble = (Math.random() - 0.5) * (Math.PI / 6); // +/- 30deg
+                        // Very Occasional slight wobble (2% chance per tick, +/- 10 degrees)
+                        // Adjusted to ensure mostly straight walking as requested
+                        if (Math.random() < 0.02) {
+                             const wobble = (Math.random() - 0.5) * (Math.PI / 9); // +/- 10deg
                              headingVector.applyAxisAngle(new THREE.Vector3(0, 1, 0), wobble);
                         }
                     }
@@ -675,6 +702,26 @@ function App() {
 
             if (current.isSwimming) {
                 wetnessChange = WETNESS_GAIN_RATE * 2;
+                if (updates.isRiding) {
+                    updates.isRiding = false;
+                    
+                    // Safe Dismount Logic
+                    const p = current.playerPos;
+                    const pVec = new THREE.Vector3(p.x, 0, p.z);
+                    const dist = pVec.length();
+                    // If in water, spawn horse back on safe land (SAND_RADIUS - 5)
+                    const safeDist = SAND_RADIUS - 5; 
+                    const ratio = safeDist / dist;
+                    const safeX = p.x * ratio;
+                    const safeZ = p.z * ratio;
+                    
+                    setHorses(h => [...h, {
+                        id: horseIdCounter.current++,
+                        position: [safeX, 0, safeZ],
+                        rotation: Math.atan2(p.x, p.z) // Face the water/player
+                    }]);
+                    addLog("Horse refused to swim and bucked you off!", "warning");
+                }
             } else if (updates.isRaining && !effectiveShelter) {
                 wetnessChange = WETNESS_GAIN_RATE * (0.5 + updates.rainIntensity);
             }
@@ -759,6 +806,7 @@ function App() {
         wetness: 0,
         isHoldingTorch: false,
         torchLifeRemaining: 0,
+        isRiding: false,
         lastFoodType: null,
         consecutiveFoodCount: 0
     });
@@ -871,6 +919,35 @@ function App() {
   const handleInteractWorkbench = useCallback(() => {
       setPhase('WORKBENCH');
   }, []);
+
+  const handleInteractHorse = useCallback((horse: Horse) => {
+      setHorses(prev => prev.filter(h => h.id !== horse.id));
+      setGameState(prev => ({ ...prev, isRiding: true }));
+      addLog("You mounted the horse.", "success");
+  }, [addLog]);
+
+  const handleDismount = useCallback(() => {
+      const pos = playerPosRef.current;
+      setGameState(prev => ({ ...prev, isRiding: false }));
+      
+      // Calculate safe spawn position to ensure horse stays on land
+      const dist = new THREE.Vector3(pos.x, 0, pos.z).length();
+      let spawnX = pos.x;
+      let spawnZ = pos.z;
+      
+      if (dist > SAND_RADIUS - 2) {
+          const ratio = (SAND_RADIUS - 2) / dist;
+          spawnX = pos.x * ratio;
+          spawnZ = pos.z * ratio;
+      }
+
+      setHorses(prev => [...prev, {
+          id: horseIdCounter.current++,
+          position: [spawnX, 0, spawnZ],
+          rotation: Math.random() * Math.PI * 2
+      }]);
+      addLog("You dismounted.", "info");
+  }, [addLog]);
 
   const handleWorkbenchAction = useCallback((action: 'CRAFT' | 'DEPOSIT' | 'WITHDRAW', itemType?: ItemType, slotIndex?: number) => {
       setGameState(prev => {
@@ -1090,10 +1167,12 @@ function App() {
         plantedSeeds={plantedSeeds}
         campfires={campfires}
         npcs={npcs}
+        horses={horses}
         handleCollect={handleCollect}
         handleTreeShake={handleTreeShake}
         handleInteractWorkbench={handleInteractWorkbench}
         handleInteractNPC={handleInteractNPC}
+        handleInteractHorse={handleInteractHorse}
         playerPosRef={playerPosRef}
       />
       <UIOverlay 
@@ -1112,6 +1191,7 @@ function App() {
         onNPCCollect={handleNPCCollect}
         onNPCFeed={handleNPCFeed}
         onCloseNPCMenu={() => setPhase('PLAYING')}
+        onDismount={handleDismount}
       />
     </div>
   );

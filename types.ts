@@ -46,6 +46,12 @@ export interface Campfire {
   isLarge: boolean;
 }
 
+export interface Horse {
+    id: number;
+    position: [number, number, number];
+    rotation: number;
+}
+
 export type NPCState = 'UNCONSCIOUS' | 'IDLE' | 'MOVING' | 'WORKING';
 export type NPCTask = 'GATHER_WOOD' | 'GATHER_APPLE' | 'FISH' | null;
 
@@ -92,6 +98,7 @@ export interface GameState {
   wetness: number; // 0 to 100
   isHoldingTorch: boolean;
   torchLifeRemaining: number;
+  isRiding: boolean;
   
   // Nutrition Tracking
   lastFoodType: ItemType | null;

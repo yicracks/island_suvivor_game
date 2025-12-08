@@ -1,3 +1,5 @@
+
+
 import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Sky, Stars, Sparkles, Text } from '@react-three/drei';
@@ -20,9 +22,10 @@ import {
     TORCH_LIGHT_RADIUS,
     TORCH_LIGHT_INTENSITY,
     NPC_INDICATOR_DURATION,
-    NPC_MOVEMENT_SPEED
+    NPC_MOVEMENT_SPEED,
+    HORSE_SPEED_MULTIPLIER
 } from '../constants';
-import { Resource, ItemType, GameState, GamePhase, TreeData, Campfire, PlantedSeed, NPC } from '../types';
+import { Resource, ItemType, GameState, GamePhase, TreeData, Campfire, PlantedSeed, NPC, Horse } from '../types';
 
 interface RainProps { intensity?: number; }
 const Rain: React.FC<RainProps> = ({ intensity = 0.5 }) => {
@@ -79,7 +82,7 @@ const ClickRipple: React.FC<ClickRippleProps> = ({ x, z, onComplete }) => {
 
     return (
         <mesh ref={mesh} position={[x, 0.05, z]} rotation={[-Math.PI / 2, 0, 0]}>
-            <ringGeometry args={[0.5, 0.6, 32]} />
+            <ringGeometry args={[0.2, 0.25, 32]} />
             <meshBasicMaterial color="white" transparent opacity={0.8} />
         </mesh>
     );
@@ -159,8 +162,71 @@ const NPCIndicator: React.FC<NPCIndicatorProps> = ({ npcs }) => {
     );
 }
 
-interface HumanoidPlayerProps { playerPosRef: React.MutableRefObject<THREE.Vector3>; playerRotationRef: React.MutableRefObject<number>; isMoving: boolean; isSwimming: boolean; isSick: boolean; isHoldingTorch: boolean; }
-const HumanoidPlayer: React.FC<HumanoidPlayerProps> = ({ playerPosRef, playerRotationRef, isMoving, isSwimming, isSick, isHoldingTorch }) => {
+interface HorseModelProps { position?: [number, number, number]; rotation?: number; onClick?: () => void; isRiding?: boolean; isMoving?: boolean; }
+const HorseModel: React.FC<HorseModelProps> = ({ position, rotation, onClick, isRiding, isMoving }) => {
+    const [hovered, setHover] = useState(false);
+    const flLeg = useRef<THREE.Group>(null);
+    const frLeg = useRef<THREE.Group>(null);
+    const blLeg = useRef<THREE.Group>(null);
+    const brLeg = useRef<THREE.Group>(null);
+    const bodyGroup = useRef<THREE.Group>(null);
+
+    useEffect(() => { if (!isRiding && hovered) document.body.style.cursor = 'pointer'; else document.body.style.cursor = 'auto'; return () => { document.body.style.cursor = 'auto'; }; }, [hovered, isRiding]);
+    
+    useFrame((state) => {
+        if (isMoving || (isRiding && isMoving)) {
+            const t = state.clock.elapsedTime * 15;
+            if (flLeg.current) flLeg.current.rotation.x = Math.sin(t) * 0.4;
+            if (frLeg.current) frLeg.current.rotation.x = Math.sin(t + Math.PI) * 0.4;
+            if (blLeg.current) blLeg.current.rotation.x = Math.sin(t + Math.PI/2) * 0.4;
+            if (brLeg.current) brLeg.current.rotation.x = Math.sin(t + Math.PI*1.5) * 0.4;
+            
+            if (bodyGroup.current) {
+                bodyGroup.current.position.y = Math.sin(t * 2) * 0.05;
+            }
+        } else {
+            if (flLeg.current) flLeg.current.rotation.x = 0;
+            if (frLeg.current) frLeg.current.rotation.x = 0;
+            if (blLeg.current) blLeg.current.rotation.x = 0;
+            if (brLeg.current) brLeg.current.rotation.x = 0;
+            if (bodyGroup.current) bodyGroup.current.position.y = 0;
+        }
+    });
+
+    return (
+        <group 
+            position={position} 
+            rotation={rotation ? [0, rotation, 0] : [0,0,0]} 
+            onClick={onClick ? (e) => { e.stopPropagation(); onClick(); } : undefined}
+            onPointerOver={() => setHover(true)} 
+            onPointerOut={() => setHover(false)}
+        >
+            <group ref={bodyGroup}>
+                <mesh position={[0, 0.8, 0]} castShadow><boxGeometry args={[0.6, 0.6, 1.4]} /><meshStandardMaterial color="#5d4037" /></mesh> {/* Body */}
+                <mesh position={[0, 1.4, 0.6]} rotation={[-0.5, 0, 0]} castShadow><boxGeometry args={[0.3, 0.8, 0.4]} /><meshStandardMaterial color="#5d4037" /></mesh> {/* Neck */}
+                <mesh position={[0, 1.8, 0.8]} castShadow><boxGeometry args={[0.35, 0.4, 0.7]} /><meshStandardMaterial color="#5d4037" /></mesh> {/* Head */}
+                <mesh position={[0, 0.8, -0.7]} rotation={[0.5, 0, 0]}><cylinderGeometry args={[0.05, 0.1, 0.6]} /><meshStandardMaterial color="black" /></mesh> {/* Tail */}
+            </group>
+
+            {/* Legs attached to body group but pivoted */}
+            <group position={[-0.2, 0.5, 0.6]} ref={flLeg}>
+                 <mesh position={[0, -0.4, 0]} castShadow><cylinderGeometry args={[0.08, 0.08, 0.8]} /><meshStandardMaterial color="#3e2723" /></mesh>
+            </group>
+            <group position={[0.2, 0.5, 0.6]} ref={frLeg}>
+                 <mesh position={[0, -0.4, 0]} castShadow><cylinderGeometry args={[0.08, 0.08, 0.8]} /><meshStandardMaterial color="#3e2723" /></mesh>
+            </group>
+            <group position={[-0.2, 0.5, -0.6]} ref={blLeg}>
+                 <mesh position={[0, -0.4, 0]} castShadow><cylinderGeometry args={[0.08, 0.08, 0.8]} /><meshStandardMaterial color="#3e2723" /></mesh>
+            </group>
+            <group position={[0.2, 0.5, -0.6]} ref={brLeg}>
+                 <mesh position={[0, -0.4, 0]} castShadow><cylinderGeometry args={[0.08, 0.08, 0.8]} /><meshStandardMaterial color="#3e2723" /></mesh>
+            </group>
+        </group>
+    );
+};
+
+interface HumanoidPlayerProps { playerPosRef: React.MutableRefObject<THREE.Vector3>; playerRotationRef: React.MutableRefObject<number>; isMoving: boolean; isSwimming: boolean; isSick: boolean; isHoldingTorch: boolean; isRiding: boolean; }
+const HumanoidPlayer: React.FC<HumanoidPlayerProps> = ({ playerPosRef, playerRotationRef, isMoving, isSwimming, isSick, isHoldingTorch, isRiding }) => {
   const group = useRef<THREE.Group>(null);
   const innerGroup = useRef<THREE.Group>(null);
   const headGroup = useRef<THREE.Group>(null);
@@ -178,12 +244,19 @@ const HumanoidPlayer: React.FC<HumanoidPlayerProps> = ({ playerPosRef, playerRot
       let diff = targetRot - currentRot;
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
-      group.current.rotation.y += diff * 0.25;
+      
+      // Faster turning when riding horse to feel snappier
+      const rotationSpeed = isRiding ? 0.5 : 0.25;
+      group.current.rotation.y += diff * rotationSpeed;
     }
     if (innerGroup.current) {
         // TILT +90 degrees for Head Forward Prone
         const targetTilt = isSwimming ? Math.PI / 2 : 0;
         innerGroup.current.rotation.x = THREE.MathUtils.lerp(innerGroup.current.rotation.x, targetTilt, 0.1);
+        
+        // Riding Elevation
+        const targetY = isRiding ? 0.8 : 0;
+        innerGroup.current.position.y = THREE.MathUtils.lerp(innerGroup.current.position.y, targetY, 0.1);
     }
     if (headGroup.current) {
         // Counter rotate -90 degrees so Head is Up relative to World (Face Forward)
@@ -192,7 +265,7 @@ const HumanoidPlayer: React.FC<HumanoidPlayerProps> = ({ playerPosRef, playerRot
     }
 
     const speedMult = isSick ? 0.5 : 1;
-    const t = state.clock.elapsedTime * (isSwimming ? 8 : 12) * speedMult;
+    const t = state.clock.elapsedTime * (isSwimming ? 8 : (isRiding ? 15 : 12)) * speedMult;
     const legAmp = isSwimming ? 0.3 : 0.6;
     const armAmp = isSwimming ? 0.8 : 0.5;
     
@@ -201,6 +274,13 @@ const HumanoidPlayer: React.FC<HumanoidPlayerProps> = ({ playerPosRef, playerRot
         if (rightArm.current) { rightArm.current.rotation.x = Math.cos(t) * armAmp - Math.PI; rightArm.current.rotation.z = -Math.cos(t) * 0.3; }
         if (leftLeg.current) leftLeg.current.rotation.x = Math.cos(t * 2) * 0.3;
         if (rightLeg.current) rightLeg.current.rotation.x = Math.sin(t * 2) * 0.3;
+    } else if (isRiding) {
+        // Sitting pose
+        if (leftLeg.current) { leftLeg.current.rotation.x = -Math.PI/3; leftLeg.current.rotation.z = -0.3; }
+        if (rightLeg.current) { rightLeg.current.rotation.x = -Math.PI/3; rightLeg.current.rotation.z = 0.3; }
+        // Arms holding reins
+        if (leftArm.current) { leftArm.current.rotation.x = -Math.PI/3; }
+        if (rightArm.current) { rightArm.current.rotation.x = isHoldingTorch ? -Math.PI / 3 : -Math.PI/3; }
     } else {
         const legLRot = isMoving ? Math.sin(t) * legAmp : 0;
         const legRRot = isMoving ? Math.sin(t + Math.PI) * legAmp : 0;
@@ -219,6 +299,7 @@ const HumanoidPlayer: React.FC<HumanoidPlayerProps> = ({ playerPosRef, playerRot
   return (
     <group ref={group} dispose={null}>
       <group ref={innerGroup}>
+        {isRiding && <HorseModel isRiding={true} isMoving={isMoving} position={[0, -0.8, 0]} />}
         <group position={[0, 0, 0]}>
             <mesh position={[0, 0.75, 0]} castShadow receiveShadow><boxGeometry args={[0.35, 0.5, 0.2]} /><meshStandardMaterial color={isSick ? "#86efac" : "#3b82f6"} /></mesh>
             <group position={[0, 1.15, 0]} ref={headGroup}>
@@ -478,16 +559,18 @@ interface GameSceneProps {
     handleTreeShake: (pos: [number, number, number]) => void;
     handleInteractWorkbench: () => void;
     handleInteractNPC: (npc: NPC) => void;
+    handleInteractHorse: (horse: Horse) => void;
     resources: Resource[];
     trees: TreeData[];
     plantedSeeds: PlantedSeed[];
     campfires: Campfire[];
     npcs: NPC[];
+    horses: Horse[];
     playerPosRef: React.MutableRefObject<THREE.Vector3>;
 }
 
 const GameScene: React.FC<GameSceneProps> = ({ 
-    gameState, phase, setMoving, setSwimming, setSheltered, handleCollect, handleTreeShake, handleInteractWorkbench, handleInteractNPC, resources, trees, plantedSeeds, campfires, npcs, playerPosRef 
+    gameState, phase, setMoving, setSwimming, setSheltered, handleCollect, handleTreeShake, handleInteractWorkbench, handleInteractNPC, handleInteractHorse, resources, trees, plantedSeeds, campfires, npcs, horses, playerPosRef 
 }) => {
   const { camera } = useThree();
   const playerPos = useRef(new THREE.Vector3(0, 0, 0));
@@ -542,12 +625,22 @@ const GameScene: React.FC<GameSceneProps> = ({
         const direction = new THREE.Vector3().subVectors(targetPos.current, playerPos.current);
         direction.y = 0;
         const dist = direction.length();
-        if (dist < 0.1) { setIsMovingLocal(false); setMoving(false); } 
-        else {
+        
+        let speed = MOVEMENT_SPEED * (gameState.sickness ? MOVEMENT_SPEED_SICK_MULTIPLIER : 1);
+        if (gameState.isRiding) speed *= HORSE_SPEED_MULTIPLIER;
+        
+        const moveDist = speed * delta;
+
+        if (dist <= moveDist) {
+             // Arrived - snap to target to prevent overshoot/shaking
+             playerPos.current.x = targetPos.current.x;
+             playerPos.current.z = targetPos.current.z;
+             setIsMovingLocal(false); 
+             setMoving(false); 
+        } else {
             direction.normalize();
             rotationRef.current = Math.atan2(direction.x, direction.z);
-            const speed = MOVEMENT_SPEED * (gameState.sickness ? MOVEMENT_SPEED_SICK_MULTIPLIER : 1);
-            const moveStep = direction.multiplyScalar(speed * delta);
+            const moveStep = direction.multiplyScalar(moveDist);
             playerPos.current.add(moveStep);
         }
     }
@@ -579,10 +672,11 @@ const GameScene: React.FC<GameSceneProps> = ({
       {(phase === 'PLAYING' || phase === 'PAUSED' || phase === 'WORKBENCH' || phase === 'NPC_MENU') && (
         <>
             <group position={playerPos.current}><NPCIndicator npcs={npcs} /></group>
-            <HumanoidPlayer playerPosRef={playerPos} playerRotationRef={rotationRef} isMoving={isMovingLocal} isSwimming={isSwimmingLocal} isSick={gameState.sickness} isHoldingTorch={gameState.isHoldingTorch} />
+            <HumanoidPlayer playerPosRef={playerPos} playerRotationRef={rotationRef} isMoving={isMovingLocal} isSwimming={isSwimmingLocal} isSick={gameState.sickness} isHoldingTorch={gameState.isHoldingTorch} isRiding={gameState.isRiding} />
         </>
       )}
       {npcs.map(npc => (<NPCModel key={npc.id} npc={npc} onClick={handleInteractNPC} playerPos={playerPos.current} />))}
+      {horses.map(horse => (<HorseModel key={horse.id} position={horse.position} rotation={horse.rotation} onClick={() => handleInteractHorse(horse)} />))}
       {campfires.map(c => (<CampfireModel key={c.id} position={c.position} isLarge={c.isLarge} />))}
       {plantedSeeds.map(s => (<PlantedSapling key={s.id} position={s.position} />))}
       {resources.map((res) => (

@@ -1,4 +1,13 @@
 
+
+
+
+
+
+
+
+
+
 // Map Settings
 export const ISLAND_RADIUS = 50;
 export const SAND_RADIUS = 55;
@@ -13,7 +22,7 @@ export const HEALTH_DECAY_MOVING = 0.6;
 export const HEALTH_DECAY_SWIMMING = 1.5;
 export const MOVEMENT_SPEED = 7;
 export const INTERACTION_DISTANCE = 4.0;
-export const FISH_INTERACTION_DISTANCE = 8.0; // Larger radius for easier fishing
+export const FISH_INTERACTION_DISTANCE = 8.0; 
 export const MOVEMENT_SPEED_SICK_MULTIPLIER = 0.5;
 
 // Resources
@@ -25,60 +34,70 @@ export const BIG_FISH_HEAL_AMOUNT = 80;
 
 export const TOTAL_APPLES = 8;
 export const TOTAL_FISH = 15;
-export const RESPAWN_RATE = 20000; // ms
-export const TREE_DROP_CHANCE = 0.5; // Base chance, scales with tree size 
-export const TREE_DECAY_FACTOR = 0.8; // Divisor for subsequent shakes
-export const TREE_RECOVERY_TIME = 10000; // ms to recover 1 shake count
+export const RESPAWN_RATE = 20000; 
+export const TREE_DROP_CHANCE = 0.5; 
+export const TREE_DECAY_FACTOR = 0.8; 
+export const TREE_RECOVERY_TIME = 10000; 
+export const TREE_AUTO_DROP_INTERVAL_MIN = 60000;
+export const TREE_AUTO_DROP_INTERVAL_MAX = 120000;
+
 export const INVENTORY_SIZE = 10;
 export const WORKBENCH_STORAGE_SIZE = 20;
-export const INITIAL_TREE_COUNT = 15; // Reduced from 40
+export const INITIAL_TREE_COUNT = 15;
 
 // Lifecycle
-export const ITEM_DESPAWN_TIME = 60000; // 60 seconds
+export const ITEM_DESPAWN_TIME = 60000;
 export const TREE_GROWTH_TIME_MIN = 30000;
 export const TREE_GROWTH_TIME_MAX = 60000;
-export const TREE_GROWTH_CHANCE = 0.7; // Chance to successfully grow
+export const TREE_GROWTH_CHANCE = 0.7; 
 export const MAX_TREE_SCALE = 2.5;
-export const TREE_PASSIVE_GROWTH_RATE = 0.02; // Base scale increase per second
+export const TREE_GROWTH_INTERVAL = 10000; // 10 seconds
+export const TREE_GROWTH_STEP = 0.1; // Small growth step
 
 // Items & Structures
-export const TORCH_DURATION = 60000; // 60 seconds
+export const TORCH_DURATION = 60000; 
 export const TORCH_LIGHT_RADIUS = 25;
 export const TORCH_LIGHT_INTENSITY = 2;
-export const CAMPFIRE_DURATION = 240000; // 4 minutes
+export const CAMPFIRE_DURATION = 240000;
 export const CAMPFIRE_LIGHT_RADIUS = 25;
-export const LARGE_CAMPFIRE_DURATION = 120000; // Will be set to DAY_LENGTH_MS in logic effectively, but base value here
+export const LARGE_CAMPFIRE_DURATION = 120000;
 export const LARGE_CAMPFIRE_LIGHT_RADIUS = 45;
 export const WORKBENCH_SHELTER_RADIUS = 6.0;
 
 // Environment
-export const DAY_LENGTH_MS = 120000; // 2 minutes per day
-export const MIN_TIME_BETWEEN_RAINS = 120000; // Rain max once per "day"
+export const DAY_LENGTH_MS = 600000; // Increased to 10 minutes
+export const MIN_TIME_BETWEEN_RAINS = 120000; 
 export const RAIN_DURATION_MIN = 30000;
 export const RAIN_DURATION_MAX = 60000;
 
 // Sickness & Weather Logic
 export const MAX_WETNESS = 100;
-export const WETNESS_GAIN_RATE = 2.0; // Per tick (100ms)
+export const WETNESS_GAIN_RATE = 2.0; 
 export const WETNESS_DRY_RATE = 1.0;
-export const SICKNESS_CHANCE_FROM_WETNESS = 0.02; // Per tick if wet > 80
+export const SICKNESS_CHANCE_FROM_WETNESS = 0.02; 
 export const SICKNESS_CHANCE_RAW_FISH = 0.30;
 export const SICKNESS_CHANCE_MALNUTRITION = 0.25;
-export const MALNUTRITION_THRESHOLD = 4; // 4 of same food in a row
-export const SICKNESS_DURATION = 30000; // 30 seconds
+export const MALNUTRITION_THRESHOLD = 4;
+export const SICKNESS_DURATION = 30000;
 export const SHELTER_DISTANCE = 3.5;
 export const HEAVY_RAIN_THRESHOLD = 0.7;
 
 // Fish AI
-export const FISH_SPEED_SLOW = 0.8; // Slower for easier catching
-export const FISH_SPEED_FAST = 2.5; // Slower for easier catching
+export const FISH_SPEED_SLOW = 0.8; 
+export const FISH_SPEED_FAST = 2.5; 
 
 // NPC
-export const NPC_SPAWN_CHANCE = 0.0005; // Per tick (low probability)
-export const NPC_DESPAWN_TIME = 60000; // 60s to rescue
+export const NPC_SPAWN_CHANCE = 0.02; 
+export const NPC_DESPAWN_TIME = 60000; 
 export const NPC_MAX_ENERGY = 100;
 export const NPC_ENERGY_DECAY = 0.1;
-export const NPC_WORK_DURATION = 3000; // ms per attempt
+export const NPC_WORK_DURATION = 3000; 
 export const NPC_BASE_SUCCESS_RATE = 0.3;
 export const NPC_SKILL_GAIN = 0.05;
-export const NPC_MOVEMENT_SPEED = 5;
+export const NPC_MOVEMENT_SPEED = 7; 
+export const NPC_WANDER_DISTANCE = 30; 
+export const NPC_SELF_FEED_THRESHOLD = 20;
+export const NPC_PAUSE_DURATION = 5000;
+export const NPC_INDICATOR_DURATION = 15000;
+
+export const GAME_LOOP_INTERVAL = 1000;

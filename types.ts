@@ -1,4 +1,5 @@
 
+
 import { Vector3 } from 'three';
 
 export enum ItemType {
@@ -28,6 +29,7 @@ export interface TreeData {
   scale: number;
   shakeCount: number; // For diminishing returns
   lastShakeTime: number; // For recovery
+  nextDropTime: number; // For passive apple dropping
 }
 
 export interface PlantedSeed {
@@ -40,7 +42,7 @@ export interface PlantedSeed {
 export interface Campfire {
   id: number;
   position: [number, number, number];
-  lifeRemaining: number;
+  expiresAt: number;
   isLarge: boolean;
 }
 
@@ -53,6 +55,7 @@ export interface NPC {
     position: [number, number, number];
     state: NPCState;
     targetPos: [number, number, number] | null;
+    heading: [number, number, number]; // Vector direction
     energy: number;
     inventory: ItemType[];
     currentTask: NPCTask;
@@ -63,6 +66,11 @@ export interface NPC {
     };
     actionTimer: number; // ms until next action/move
     createdAt: number; // For despawning if unconscious
+    
+    // New AI Logic
+    starving: boolean;
+    lastPlayerPauseTime: number;
+    ignorePlayerUntil: number;
 }
 
 export interface GameState {

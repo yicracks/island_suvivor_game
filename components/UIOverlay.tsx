@@ -83,7 +83,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
            </h1>
            <p className="text-slate-400 mb-8 text-lg">
              Explore. Eat. Survive. <br/>
-             <span className="text-sm opacity-70">Right click to move. Click objects to gather.</span>
+             <span className="text-sm opacity-70">Left click to move. Click objects to gather.</span>
            </p>
            <button 
              onClick={onStart}
@@ -478,7 +478,7 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
       {/* Instructions */}
       {phase === 'PLAYING' && (
         <div className="absolute top-20 right-4 text-white/40 text-xs text-right hidden sm:block pointer-events-none">
-            <p>Right Click ground to move</p>
+            <p>Left Click ground to move</p>
             <p>Left Click trees/items to interact</p>
             <p>Click Center Workbench to Craft</p>
             <p>Eat Apple -> Drops Seed</p>

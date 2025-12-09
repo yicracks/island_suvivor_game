@@ -1,20 +1,9 @@
 
-
-
-
-
-
-
-
-
-
-
-
 // Map Settings
 export const ISLAND_RADIUS = 50;
 export const SAND_RADIUS = 55;
 export const SEA_SIZE = 300;
-export const SWIM_THRESHOLD = 52;
+export const SWIM_THRESHOLD = 55;
 export const WATER_MOVEMENT_LIMIT = 85;
 
 // Game Balance
@@ -102,6 +91,5 @@ export const NPC_MOVEMENT_SPEED = 7;
 export const NPC_WANDER_DISTANCE = 30; 
 export const NPC_SELF_FEED_THRESHOLD = 20;
 export const NPC_PAUSE_DURATION = 5000;
-export const NPC_INDICATOR_DURATION = 15000;
 
 export const GAME_LOOP_INTERVAL = 1000;

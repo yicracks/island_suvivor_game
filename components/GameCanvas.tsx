@@ -1,5 +1,4 @@
 
-
 import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Sky, Stars, Sparkles, Text } from '@react-three/drei';
@@ -21,7 +20,6 @@ import {
     LARGE_CAMPFIRE_LIGHT_RADIUS,
     TORCH_LIGHT_RADIUS,
     TORCH_LIGHT_INTENSITY,
-    NPC_INDICATOR_DURATION,
     NPC_MOVEMENT_SPEED,
     HORSE_SPEED_MULTIPLIER
 } from '../constants';
@@ -140,28 +138,6 @@ const WorkbenchModel: React.FC<WorkbenchModelProps> = ({ position, onClick, play
     );
 };
 
-interface NPCIndicatorProps { npcs: NPC[]; }
-const NPCIndicator: React.FC<NPCIndicatorProps> = ({ npcs }) => {
-    const group = useRef<THREE.Group>(null);
-    useFrame((state) => {
-        if (!group.current) return;
-        const now = Date.now();
-        const recent = npcs.find(n => now - n.createdAt < NPC_INDICATOR_DURATION);
-        if (!recent) { group.current.visible = false; return; }
-        group.current.visible = true;
-        const dist = new THREE.Vector3(...recent.position).distanceTo(group.current.parent?.position || new THREE.Vector3());
-        if (dist < 10) { group.current.visible = false; return; }
-        group.current.lookAt(recent.position[0], recent.position[1], recent.position[2]);
-        group.current.position.y = 3 + Math.sin(state.clock.elapsedTime * 4) * 0.2;
-    });
-    return (
-        <group ref={group} visible={false}>
-             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -1.5]}><coneGeometry args={[0.3, 0.8, 8]} /><meshBasicMaterial color="red" /></mesh>
-             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -0.5]}><cylinderGeometry args={[0.1, 0.1, 1, 8]} /><meshBasicMaterial color="red" /></mesh>
-        </group>
-    );
-}
-
 interface HorseModelProps { position?: [number, number, number]; rotation?: number; onClick?: () => void; isRiding?: boolean; isMoving?: boolean; }
 const HorseModel: React.FC<HorseModelProps> = ({ position, rotation, onClick, isRiding, isMoving }) => {
     const [hovered, setHover] = useState(false);
@@ -171,7 +147,12 @@ const HorseModel: React.FC<HorseModelProps> = ({ position, rotation, onClick, is
     const brLeg = useRef<THREE.Group>(null);
     const bodyGroup = useRef<THREE.Group>(null);
 
-    useEffect(() => { if (!isRiding && hovered) document.body.style.cursor = 'pointer'; else document.body.style.cursor = 'auto'; return () => { document.body.style.cursor = 'auto'; }; }, [hovered, isRiding]);
+    useEffect(() => { 
+        if (!isRiding && hovered) document.body.style.cursor = 'pointer'; 
+        else if (isRiding && hovered && onClick) document.body.style.cursor = 'pointer'; // Allow pointer if riding and clickable (dismount)
+        else document.body.style.cursor = 'auto'; 
+        return () => { document.body.style.cursor = 'auto'; }; 
+    }, [hovered, isRiding, onClick]);
     
     useFrame((state) => {
         if (isMoving || (isRiding && isMoving)) {
@@ -225,8 +206,8 @@ const HorseModel: React.FC<HorseModelProps> = ({ position, rotation, onClick, is
     );
 };
 
-interface HumanoidPlayerProps { playerPosRef: React.MutableRefObject<THREE.Vector3>; playerRotationRef: React.MutableRefObject<number>; isMoving: boolean; isSwimming: boolean; isSick: boolean; isHoldingTorch: boolean; isRiding: boolean; }
-const HumanoidPlayer: React.FC<HumanoidPlayerProps> = ({ playerPosRef, playerRotationRef, isMoving, isSwimming, isSick, isHoldingTorch, isRiding }) => {
+interface HumanoidPlayerProps { playerPosRef: React.MutableRefObject<THREE.Vector3>; playerRotationRef: React.MutableRefObject<number>; isMoving: boolean; isSwimming: boolean; isSick: boolean; isHoldingTorch: boolean; isRiding: boolean; onDismount: () => void; }
+const HumanoidPlayer: React.FC<HumanoidPlayerProps> = ({ playerPosRef, playerRotationRef, isMoving, isSwimming, isSick, isHoldingTorch, isRiding, onDismount }) => {
   const group = useRef<THREE.Group>(null);
   const innerGroup = useRef<THREE.Group>(null);
   const headGroup = useRef<THREE.Group>(null);
@@ -299,7 +280,7 @@ const HumanoidPlayer: React.FC<HumanoidPlayerProps> = ({ playerPosRef, playerRot
   return (
     <group ref={group} dispose={null}>
       <group ref={innerGroup}>
-        {isRiding && <HorseModel isRiding={true} isMoving={isMoving} position={[0, -0.8, 0]} />}
+        {isRiding && <HorseModel isRiding={true} isMoving={isMoving} position={[0, -0.8, 0]} onClick={onDismount} />}
         <group position={[0, 0, 0]}>
             <mesh position={[0, 0.75, 0]} castShadow receiveShadow><boxGeometry args={[0.35, 0.5, 0.2]} /><meshStandardMaterial color={isSick ? "#86efac" : "#3b82f6"} /></mesh>
             <group position={[0, 1.15, 0]} ref={headGroup}>
@@ -367,6 +348,8 @@ const NPCModel: React.FC<NPCModelProps> = ({ npc, onClick, playerPos }) => {
         const targetY = isSwimming ? -0.5 : (isUnconscious ? 0.2 : 0);
         group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, targetY, 0.1);
 
+        let actuallyMoving = false;
+
         if (dist > 0.01) {
              const moveStep = Math.min(dist, NPC_MOVEMENT_SPEED * delta); // Move at constant speed
              dir.normalize().multiplyScalar(moveStep);
@@ -377,6 +360,7 @@ const NPCModel: React.FC<NPCModelProps> = ({ npc, onClick, playerPos }) => {
              // Rotate to face movement
              const angle = Math.atan2(dir.x, dir.z);
              group.current.rotation.y = THREE.MathUtils.lerp(group.current.rotation.y, angle, 0.2);
+             actuallyMoving = true;
         } else {
              // Already at target, sync X/Z
              group.current.position.x = targetPos.x;
@@ -414,7 +398,7 @@ const NPCModel: React.FC<NPCModelProps> = ({ npc, onClick, playerPos }) => {
                 if (leftLeg.current) leftLeg.current.rotation.x = Math.cos(t * 2) * 0.3;
                 if (rightLeg.current) rightLeg.current.rotation.x = Math.sin(t * 2) * 0.3;
             } 
-            else if (isMoving && dist > 0.05) {
+            else if (isMoving && actuallyMoving) {
                 // Walking
                 if (leftLeg.current) leftLeg.current.rotation.x = Math.sin(t) * 0.6;
                 if (rightLeg.current) rightLeg.current.rotation.x = Math.sin(t + Math.PI) * 0.6;
@@ -423,6 +407,9 @@ const NPCModel: React.FC<NPCModelProps> = ({ npc, onClick, playerPos }) => {
             } else if (isWorking) {
                 // Working animation
                 if (rightArm.current) rightArm.current.rotation.x = Math.abs(Math.sin(t)) * -1;
+                // Reset legs
+                if (leftLeg.current) leftLeg.current.rotation.x = 0;
+                if (rightLeg.current) rightLeg.current.rotation.x = 0;
             } else {
                 // Idle Reset
                 if (leftLeg.current) leftLeg.current.rotation.x = 0;
@@ -560,6 +547,7 @@ interface GameSceneProps {
     handleInteractWorkbench: () => void;
     handleInteractNPC: (npc: NPC) => void;
     handleInteractHorse: (horse: Horse) => void;
+    handleDismount: () => void;
     resources: Resource[];
     trees: TreeData[];
     plantedSeeds: PlantedSeed[];
@@ -570,7 +558,7 @@ interface GameSceneProps {
 }
 
 const GameScene: React.FC<GameSceneProps> = ({ 
-    gameState, phase, setMoving, setSwimming, setSheltered, handleCollect, handleTreeShake, handleInteractWorkbench, handleInteractNPC, handleInteractHorse, resources, trees, plantedSeeds, campfires, npcs, horses, playerPosRef 
+    gameState, phase, setMoving, setSwimming, setSheltered, handleCollect, handleTreeShake, handleInteractWorkbench, handleInteractNPC, handleInteractHorse, handleDismount, resources, trees, plantedSeeds, campfires, npcs, horses, playerPosRef 
 }) => {
   const { camera } = useThree();
   const playerPos = useRef(new THREE.Vector3(0, 0, 0));
@@ -670,13 +658,26 @@ const GameScene: React.FC<GameSceneProps> = ({
       ))}
 
       {(phase === 'PLAYING' || phase === 'PAUSED' || phase === 'WORKBENCH' || phase === 'NPC_MENU') && (
-        <>
-            <group position={playerPos.current}><NPCIndicator npcs={npcs} /></group>
-            <HumanoidPlayer playerPosRef={playerPos} playerRotationRef={rotationRef} isMoving={isMovingLocal} isSwimming={isSwimmingLocal} isSick={gameState.sickness} isHoldingTorch={gameState.isHoldingTorch} isRiding={gameState.isRiding} />
-        </>
+        <HumanoidPlayer playerPosRef={playerPos} playerRotationRef={rotationRef} isMoving={isMovingLocal} isSwimming={isSwimmingLocal} isSick={gameState.sickness} isHoldingTorch={gameState.isHoldingTorch} isRiding={gameState.isRiding} onDismount={handleDismount} />
       )}
       {npcs.map(npc => (<NPCModel key={npc.id} npc={npc} onClick={handleInteractNPC} playerPos={playerPos.current} />))}
-      {horses.map(horse => (<HorseModel key={horse.id} position={horse.position} rotation={horse.rotation} onClick={() => handleInteractHorse(horse)} />))}
+      {horses.map(horse => (
+          <HorseModel 
+            key={horse.id} 
+            position={horse.position} 
+            rotation={horse.rotation} 
+            onClick={() => {
+                const dist = playerPos.current.distanceTo(new THREE.Vector3(...horse.position));
+                if (dist <= INTERACTION_DISTANCE * 1.5) {
+                    playerPos.current.set(horse.position[0], 0, horse.position[2]);
+                    setIsMovingLocal(false);
+                    setMoving(false);
+                    targetPos.current.copy(playerPos.current);
+                }
+                handleInteractHorse(horse);
+            }} 
+          />
+      ))}
       {campfires.map(c => (<CampfireModel key={c.id} position={c.position} isLarge={c.isLarge} />))}
       {plantedSeeds.map(s => (<PlantedSapling key={s.id} position={s.position} />))}
       {resources.map((res) => (

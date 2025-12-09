@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GameCanvas } from './components/GameCanvas';
 import { UIOverlay } from './components/UIOverlay';
@@ -73,7 +71,6 @@ import {
   NPC_WANDER_DISTANCE,
   NPC_SELF_FEED_THRESHOLD,
   NPC_PAUSE_DURATION,
-  NPC_INDICATOR_DURATION,
   GAME_LOOP_INTERVAL,
   WATER_MOVEMENT_LIMIT,
   TREE_AUTO_DROP_INTERVAL_MIN,
@@ -136,7 +133,8 @@ function App() {
       horses,
       selectedNPC,
       resources,
-      playerPos: playerPosRef.current
+      playerPos: playerPosRef.current,
+      isRiding: gameState.isRiding
   });
 
   useEffect(() => {
@@ -149,9 +147,10 @@ function App() {
           horses,
           selectedNPC,
           resources,
-          playerPos: playerPosRef.current
+          playerPos: playerPosRef.current,
+          isRiding: gameState.isRiding
       };
-  }, [isMoving, isSwimming, isSheltered, campfires, npcs, horses, selectedNPC, resources]);
+  }, [isMoving, isSwimming, isSheltered, campfires, npcs, horses, selectedNPC, resources, gameState.isRiding]);
 
   // IDs
   const lastUpdateRef = useRef(Date.now());
@@ -203,7 +202,7 @@ function App() {
                 position: treePos, 
                 scale, 
                 shakeCount: 0, 
-                lastShakeTime: 0,
+                lastShakeTime: 0, 
                 nextDropTime: now + Math.random() * TREE_AUTO_DROP_INTERVAL_MAX
             });
 
@@ -301,7 +300,9 @@ function App() {
 
         const now = Date.now();
         const deltaMs = now - lastUpdateRef.current;
-        const deltaSeconds = Math.min(deltaMs / 1000, 0.2); // Cap at 0.2s to prevent physics explosion
+        // IMPORTANT: Allow up to 2.0s of delta calculation. 
+        // We run this loop every 1000ms, so we need to process at least 1.0s of physics.
+        const deltaSeconds = Math.min(deltaMs / 1000, 2.0); 
         lastUpdateRef.current = now;
 
         const current = stateRef.current; // Access latest state via ref
@@ -400,8 +401,6 @@ function App() {
             // Initial heading towards center
             const heading = new THREE.Vector3(0,0,0).sub(new THREE.Vector3(spawnX, 0, spawnZ)).normalize();
             
-            const directionLabel = getDirectionLabel(spawnX, spawnZ);
-
             setNpcs(prev => [
                 ...prev,
                 {
@@ -422,7 +421,6 @@ function App() {
                     ignorePlayerUntil: 0
                 }
             ]);
-            addLog(`A survivor washed up on the ${directionLabel} shore!`, "info");
         }
 
         let eatenResourceIds: string[] = [];
@@ -609,14 +607,15 @@ function App() {
                         }
                     } 
                     else if (isFisher) {
-                        if (distToCenter < ISLAND_RADIUS) {
-                            // Wrong Zone (Land): Go to Sea
+                        if (distToCenter < SAND_RADIUS) {
+                            // Wrong Zone (Land/Beach): Go to Sea
+                            // Force direction AWAY from center
                             const dir = npcPosV.clone().sub(new THREE.Vector3(0,0,0)).normalize();
                             if (dir.lengthSq() > 0) headingVector = dir;
                         } else {
                             // Correct Zone (Sea): Patrol
                             const nextPos = npcPosV.clone().add(headingVector.clone().multiplyScalar(NPC_MOVEMENT_SPEED * deltaSeconds));
-                            if (nextPos.length() < ISLAND_RADIUS || nextPos.length() > WATER_MOVEMENT_LIMIT) bounce = true;
+                            if (nextPos.length() < SAND_RADIUS || nextPos.length() > WATER_MOVEMENT_LIMIT) bounce = true;
                         }
                     }
 
@@ -727,9 +726,9 @@ function App() {
             }
             const nearFire = current.campfires.some(c => {
                  // @ts-ignore
-                if (c.expiresAt && now > c.expiresAt) return false;
-                const dist = new THREE.Vector3(...c.position).distanceTo(current.playerPos);
-                return dist < (c.isLarge ? 12 : INTERACTION_DISTANCE * 1.5);
+                 if (c.expiresAt && now > c.expiresAt) return false;
+                 const dist = new THREE.Vector3(...c.position).distanceTo(current.playerPos);
+                 return dist < (c.isLarge ? 12 : INTERACTION_DISTANCE * 1.5);
             });
             if (nearFire) wetnessChange = -WETNESS_GAIN_RATE * 3;
 
@@ -903,6 +902,12 @@ function App() {
   }, [addLog]);
 
   const handleCollect = useCallback((resource: Resource) => {
+    // RESTRICTION: Cannot collect while riding
+    if (stateRef.current.isRiding) {
+        addLog("Cannot gather items while riding horse.", "warning");
+        return;
+    }
+
     setGameState(prev => {
         const emptyIndex = prev.inventory.findIndex(item => item === null);
         if (emptyIndex === -1) {
@@ -919,12 +924,6 @@ function App() {
   const handleInteractWorkbench = useCallback(() => {
       setPhase('WORKBENCH');
   }, []);
-
-  const handleInteractHorse = useCallback((horse: Horse) => {
-      setHorses(prev => prev.filter(h => h.id !== horse.id));
-      setGameState(prev => ({ ...prev, isRiding: true }));
-      addLog("You mounted the horse.", "success");
-  }, [addLog]);
 
   const handleDismount = useCallback(() => {
       const pos = playerPosRef.current;
@@ -944,10 +943,43 @@ function App() {
       setHorses(prev => [...prev, {
           id: horseIdCounter.current++,
           position: [spawnX, 0, spawnZ],
-          rotation: Math.random() * Math.PI * 2
+          rotation: Math.atan2(pos.x, pos.z) 
       }]);
       addLog("You dismounted.", "info");
   }, [addLog]);
+
+  const handleInteractHorse = useCallback((horse: Horse) => {
+      const playerPos = playerPosRef.current;
+      const horsePos = new THREE.Vector3(...horse.position);
+      
+      // Distance Check: Must be close to mount
+      if (playerPos.distanceTo(horsePos) > INTERACTION_DISTANCE * 1.5) {
+          addLog("Too far to mount.", "warning");
+          return;
+      }
+
+      // If already riding, perform switch
+      if (stateRef.current.isRiding) {
+           // Spawn the "old" horse at current player position (switch places)
+           // We use the playerPosRef because when riding, that's where the horse is.
+           const pos = playerPosRef.current;
+           setHorses(prev => [...prev, {
+                id: horseIdCounter.current++,
+                position: [pos.x, 0, pos.z],
+                rotation: Math.atan2(pos.x, pos.z)
+           }]);
+           addLog("You switched horses.", "success");
+      } else {
+           addLog("You mounted the horse.", "success");
+      }
+      
+      // Snap Player Position to NEW Horse Position upon mounting
+      playerPosRef.current.set(horse.position[0], 0, horse.position[2]);
+
+      // Remove the "new" horse from world (it becomes the ridden one)
+      setHorses(prev => prev.filter(h => h.id !== horse.id));
+      setGameState(prev => ({ ...prev, isRiding: true }));
+  }, [addLog]); 
 
   const handleWorkbenchAction = useCallback((action: 'CRAFT' | 'DEPOSIT' | 'WITHDRAW', itemType?: ItemType, slotIndex?: number) => {
       setGameState(prev => {
@@ -1173,6 +1205,7 @@ function App() {
         handleInteractWorkbench={handleInteractWorkbench}
         handleInteractNPC={handleInteractNPC}
         handleInteractHorse={handleInteractHorse}
+        handleDismount={handleDismount}
         playerPosRef={playerPosRef}
       />
       <UIOverlay 

@@ -25,6 +25,33 @@ import {
 } from '../constants';
 import { Resource, ItemType, GameState, GamePhase, TreeData, Campfire, PlantedSeed, NPC, Horse } from '../types';
 
+// Fix for missing R3F types in JSX in current environment
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      ambientLight: any;
+      pointLight: any;
+      directionalLight: any;
+      group: any;
+      mesh: any;
+      points: any;
+      bufferGeometry: any;
+      bufferAttribute: any;
+      pointsMaterial: any;
+      ringGeometry: any;
+      meshBasicMaterial: any;
+      meshStandardMaterial: any;
+      cylinderGeometry: any;
+      dodecahedronGeometry: any;
+      boxGeometry: any;
+      coneGeometry: any;
+      circleGeometry: any;
+      planeGeometry: any;
+      sphereGeometry: any;
+    }
+  }
+}
+
 interface RainProps { intensity?: number; }
 const Rain: React.FC<RainProps> = ({ intensity = 0.5 }) => {
     const count = Math.floor(1000 + intensity * 3000); 
@@ -91,28 +118,41 @@ const CampfireModel: React.FC<CampfireModelProps> = ({ position, isLarge }) => {
     const light = useRef<THREE.PointLight>(null);
     const scale = isLarge ? 1.5 : 1;
     const radius = isLarge ? LARGE_CAMPFIRE_LIGHT_RADIUS : CAMPFIRE_LIGHT_RADIUS;
+    
     useFrame((state) => {
         if (light.current) light.current.intensity = (isLarge ? 2.5 : 1.5) + Math.sin(state.clock.elapsedTime * 15) * 0.5 + Math.random() * 0.2;
     });
+
     return (
         <group position={position} scale={scale}>
-            {isLarge ? (
-                <group position={[0, 0, 0]}>
-                    <mesh position={[0, 0.6, 0.35]} rotation={[0.4, 0, 0]}><cylinderGeometry args={[0.06, 0.06, 1.4]} /><meshStandardMaterial color="#3f2e21" /></mesh>
-                    <mesh position={[0.3, 0.6, -0.2]} rotation={[0.4, 2.1, 0]}><cylinderGeometry args={[0.06, 0.06, 1.4]} /><meshStandardMaterial color="#3f2e21" /></mesh>
-                    <mesh position={[-0.3, 0.6, -0.2]} rotation={[0.4, -2.1, 0]}><cylinderGeometry args={[0.06, 0.06, 1.4]} /><meshStandardMaterial color="#3f2e21" /></mesh>
-                    <mesh position={[0, 0.1, 0]}><dodecahedronGeometry args={[0.3]} /><meshBasicMaterial color="#ff4500" transparent opacity={0.8} /></mesh>
-                </group>
-            ) : (
-                <group>
-                    <mesh position={[0, 0.1, 0.2]} rotation={[0.2, 0, 0]}><cylinderGeometry args={[0.08, 0.08, 0.6]} /><meshStandardMaterial color="#3f2e21" /></mesh>
-                    <mesh position={[0.2, 0.1, -0.1]} rotation={[0.2, 2, 0]}><cylinderGeometry args={[0.08, 0.08, 0.6]} /><meshStandardMaterial color="#3f2e21" /></mesh>
-                    <mesh position={[-0.2, 0.1, -0.1]} rotation={[0.2, -2, 0]}><cylinderGeometry args={[0.08, 0.08, 0.6]} /><meshStandardMaterial color="#3f2e21" /></mesh>
-                    <mesh position={[0, 0.3, 0]}><dodecahedronGeometry args={[0.25]} /><meshBasicMaterial color="#ff4500" transparent opacity={0.8} /></mesh>
-                </group>
-            )}
-            <pointLight ref={light} color="#ff6600" distance={radius} decay={2} castShadow />
-            <Sparkles count={20 * scale} scale={1 * scale} size={2 * scale} speed={0.4} opacity={0.5} color="#ffaa00" position={[0, 0.5, 0]} />
+            <group position={[0, 0, 0]}>
+                {/* Tripod Legs */}
+                <mesh position={[0, 0.6, 0.2]} rotation={[0.35, 0, 0]}>
+                    <cylinderGeometry args={[0.05, 0.05, 1.3]} />
+                    <meshStandardMaterial color="#3f2e21" />
+                </mesh>
+                <mesh position={[0.17, 0.6, -0.1]} rotation={[0.35, 2.09, 0]}>
+                    <cylinderGeometry args={[0.05, 0.05, 1.3]} />
+                    <meshStandardMaterial color="#3f2e21" />
+                </mesh>
+                <mesh position={[-0.17, 0.6, -0.1]} rotation={[0.35, -2.09, 0]}>
+                    <cylinderGeometry args={[0.05, 0.05, 1.3]} />
+                    <meshStandardMaterial color="#3f2e21" />
+                </mesh>
+                
+                {/* Fire Mass - On top of tripod */}
+                <mesh position={[0, 0.9, 0]}>
+                    <dodecahedronGeometry args={[0.25]} />
+                    <meshBasicMaterial color="#ff4500" transparent opacity={0.9} />
+                </mesh>
+                <mesh position={[0, 1.1, 0]}>
+                    <dodecahedronGeometry args={[0.15]} />
+                    <meshBasicMaterial color="#fbbf24" transparent opacity={0.7} />
+                </mesh>
+            </group>
+            
+            <pointLight ref={light} color="#ff6600" distance={radius} decay={2} castShadow position={[0, 1, 0]} />
+            <Sparkles count={25 * scale} scale={1.2 * scale} size={4 * scale} speed={0.6} opacity={0.6} color="#ffaa00" position={[0, 1.2, 0]} />
         </group>
     )
 }
@@ -146,6 +186,12 @@ const HorseModel: React.FC<HorseModelProps> = ({ position, rotation, onClick, is
     const blLeg = useRef<THREE.Group>(null);
     const brLeg = useRef<THREE.Group>(null);
     const bodyGroup = useRef<THREE.Group>(null);
+    const playerPosRef = useRef(new THREE.Vector3());
+    
+    // For local distance check in onClick
+    useFrame(() => {
+        // Just for stability if needed, currently unused in render but used in onClick logic closure
+    });
 
     useEffect(() => { 
         if (!isRiding && hovered) document.body.style.cursor = 'pointer'; 
@@ -178,7 +224,14 @@ const HorseModel: React.FC<HorseModelProps> = ({ position, rotation, onClick, is
         <group 
             position={position} 
             rotation={rotation ? [0, rotation, 0] : [0,0,0]} 
-            onClick={onClick ? (e) => { e.stopPropagation(); onClick(); } : undefined}
+            onClick={onClick ? (e) => { 
+                // Only handle click if provided
+                // Note: The parent component handles strict distance checking via props or context usually,
+                // but here we might want to let the event bubble if this horse isn't interactive.
+                // However, for mounting logic, we want to stop prop.
+                e.stopPropagation(); 
+                onClick(); 
+            } : undefined}
             onPointerOver={() => setHover(true)} 
             onPointerOut={() => setHover(false)}
         >

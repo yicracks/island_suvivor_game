@@ -20,13 +20,13 @@ export const MOVEMENT_SPEED_SICK_MULTIPLIER = 0.5;
 // Resources
 export const APPLE_HEAL_AMOUNT = 15;
 export const FISH_HEAL_AMOUNT = 25;
-export const FISH_COOKED_HEAL_AMOUNT = 60;
+export const FISH_COOKED_HEAL_AMOUNT = 30;
 export const APPLE_JUICE_HEAL_AMOUNT = 50;
 export const BIG_FISH_HEAL_AMOUNT = 80;
 
 export const TOTAL_APPLES = 8;
 export const TOTAL_FISH = 15;
-export const TOTAL_HORSES = 3;
+export const TOTAL_HORSES = 2;
 export const RESPAWN_RATE = 20000; 
 export const TREE_DROP_CHANCE = 0.5; 
 export const TREE_DECAY_FACTOR = 0.8; 
@@ -48,13 +48,13 @@ export const TREE_GROWTH_INTERVAL = 10000; // 10 seconds
 export const TREE_GROWTH_STEP = 0.1; // Small growth step
 
 // Items & Structures
-export const TORCH_DURATION = 60000; 
-export const TORCH_LIGHT_RADIUS = 25;
+export const TORCH_DURATION = 50000; 
+export const TORCH_LIGHT_RADIUS = 30;
 export const TORCH_LIGHT_INTENSITY = 2;
-export const CAMPFIRE_DURATION = 240000;
-export const CAMPFIRE_LIGHT_RADIUS = 25;
-export const LARGE_CAMPFIRE_DURATION = 120000;
-export const LARGE_CAMPFIRE_LIGHT_RADIUS = 45;
+export const CAMPFIRE_DURATION = 200000;
+export const CAMPFIRE_LIGHT_RADIUS = 100;
+export const LARGE_CAMPFIRE_DURATION = 300000;
+export const LARGE_CAMPFIRE_LIGHT_RADIUS = 150;
 export const WORKBENCH_SHELTER_RADIUS = 6.0;
 
 // Environment

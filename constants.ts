@@ -80,7 +80,7 @@ export const FISH_SPEED_SLOW = 0.8;
 export const FISH_SPEED_FAST = 2.5; 
 
 // NPC
-export const NPC_SPAWN_CHANCE = 0.02; 
+export const NPC_SPAWN_CHANCE = 0.0;  //0.02
 export const NPC_DESPAWN_TIME = 60000; 
 export const NPC_MAX_ENERGY = 100;
 export const NPC_ENERGY_DECAY = 0.1;
